@@ -110,7 +110,50 @@ const bookingSchema = new mongoose.Schema(
     notes: {
       type: String,
       default: ''
-    }
+    },
+    paymentStatus: {
+      type: String,
+      enum: ['unpaid', 'partial', 'paid', 'failed', 'refunded'],
+      default: 'unpaid',
+      index: true
+    },
+    paymentMode: {
+      type: String,
+      enum: ['online', 'pay_to_driver'],
+      default: 'pay_to_driver'
+    },
+    paymentOption: {
+      type: String,
+      enum: ['full', 'advance', 'driver'],
+      default: 'driver'
+    },
+    amountPaid: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    advancePercentage: {
+      type: Number,
+      default: 20
+    },
+    razorpayOrderId: {
+      type: String,
+      default: '',
+      index: true
+    },
+    razorpayPaymentId: {
+      type: String,
+      default: ''
+    },
+    refunds: [
+      {
+        refundId: { type: String, default: '' },
+        amount: { type: Number, default: 0 },
+        status: { type: String, default: 'processed' },
+        reason: { type: String, default: '' },
+        createdAt: { type: Date, default: Date.now }
+      }
+    ]
   },
   { timestamps: true }
 );

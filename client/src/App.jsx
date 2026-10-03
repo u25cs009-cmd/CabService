@@ -11,6 +11,7 @@ import VehiclesPage from './pages/VehiclesPage';
 import BookingPage from './pages/BookingPage';
 import AboutPage from './pages/AboutPage';
 import ContactPage from './pages/ContactPage';
+import ReceiptPage from './pages/ReceiptPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 // Admin Pages
@@ -32,8 +33,10 @@ export default function App() {
             <Route path="/services" element={<ServicesPage />} />
             <Route path="/vehicles" element={<VehiclesPage />} />
             <Route path="/book" element={<BookingPage />} />
+            <Route path="/booking/receipt/:referenceCode" element={<ReceiptPage />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/contact" element={<ContactPage />} />
+
 
             {/* Admin Panel Routes */}
             <Route path="/admin/login" element={<AdminLoginPage />} />

@@ -132,3 +132,80 @@ export async function sendCustomerBookingUpdate(booking, driver = null) {
     return { success: false, error: error.message };
   }
 }
+
+/**
+ * Send payment receipt email to customer upon successful payment.
+ */
+export async function sendCustomerPaymentReceiptEmail(booking, paymentDetails = {}) {
+  if (!booking.email) {
+    return { success: false, reason: 'Customer did not provide an email address' };
+  }
+
+  const emailUser = process.env.EMAIL_USER;
+  const emailPass = process.env.EMAIL_PASS;
+
+  if (!emailUser || !emailPass || emailPass === 'your_email_app_password') {
+    console.log(`[EmailService] SMTP missing. Skipping payment receipt email for Ref: ${booking.referenceCode}`);
+    return { success: false, reason: 'SMTP credentials missing' };
+  }
+
+  try {
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: { user: emailUser, pass: emailPass }
+    });
+
+    const isFull = booking.paymentStatus === 'paid';
+    const amountPaidStr = `₹${booking.amountPaid || paymentDetails.amountPaid || 0}`;
+    const totalFareStr = `₹${booking.estimatedFare}`;
+    const balanceDueStr = `₹${Math.max(0, (booking.estimatedFare || 0) - (booking.amountPaid || paymentDetails.amountPaid || 0))}`;
+
+    const mailOptions = {
+      from: `"Pi-Pip-Pip Cab Service" <${emailUser}>`,
+      to: booking.email,
+      subject: `💳 Payment Receipt #${booking.referenceCode} - Pi-Pip-Pip Cabs`,
+      html: `
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
+          <div style="background-color: #10b981; color: #ffffff; padding: 20px; text-align: center;">
+            <h2 style="margin: 0; font-size: 24px;">Payment Received!</h2>
+            <p style="margin: 4px 0 0 0; font-size: 14px; opacity: 0.9;">Booking Ref: #${booking.referenceCode}</p>
+          </div>
+          <div style="padding: 20px; background-color: #ffffff;">
+            <p>Dear <strong>${booking.customerName}</strong>,</p>
+            <p>Thank you for choosing <strong>Pi-Pip-Pip Cab Service</strong>. We have received your payment via Razorpay.</p>
+            
+            <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 16px; margin: 16px 0;">
+              <h3 style="margin-top: 0; color: #0f172a; border-bottom: 1px solid #cbd5e1; padding-bottom: 8px;">Payment Summary</h3>
+              <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                <tr><td style="padding: 6px 0; color: #64748b;">Transaction ID:</td><td style="text-align: right; font-family: monospace; font-weight: bold;">${booking.razorpayPaymentId || paymentDetails.paymentId || 'N/A'}</td></tr>
+                <tr><td style="padding: 6px 0; color: #64748b;">Payment Status:</td><td style="text-align: right; font-weight: bold; color: ${isFull ? '#059669' : '#d97706'}; text-transform: uppercase;">${booking.paymentStatus}</td></tr>
+                <tr><td style="padding: 6px 0; color: #64748b;">Amount Paid:</td><td style="text-align: right; font-weight: bold; color: #059669; font-size: 16px;">${amountPaidStr}</td></tr>
+                <tr><td style="padding: 6px 0; color: #64748b;">Total Estimated Fare:</td><td style="text-align: right; font-weight: bold;">${totalFareStr}</td></tr>
+                <tr><td style="padding: 6px 0; color: #64748b;">Balance Due to Driver:</td><td style="text-align: right; font-weight: bold; color: #dc2626;">${balanceDueStr}</td></tr>
+              </table>
+            </div>
+
+            <h4 style="color: #0f172a; margin-bottom: 8px;">Trip Overview</h4>
+            <p style="margin: 4px 0;"><strong>Pickup:</strong> ${booking.pickupLocation}</p>
+            <p style="margin: 4px 0;"><strong>Drop:</strong> ${booking.dropLocation}</p>
+            <p style="margin: 4px 0;"><strong>Pickup Date & Time:</strong> ${new Date(booking.pickupDateTime).toLocaleString()}</p>
+            <p style="margin: 4px 0;"><strong>Vehicle:</strong> ${booking.vehicleName || 'Cab'}</p>
+
+            <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e2e8f0; text-align: center; color: #64748b; font-size: 12px;">
+              <p style="margin: 2px 0;">Pi-Pip-Pip Cab Service • Customer Care: +91 6201901834</p>
+              <p style="margin: 2px 0;">Email: yashiadarsh2020@gmail.com</p>
+            </div>
+          </div>
+        </div>
+      `
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`[EmailService] Payment receipt email sent: ${info.messageId}`);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error(`[EmailService] Failed to send payment receipt email: ${error.message}`);
+    return { success: false, error: error.message };
+  }
+}
+

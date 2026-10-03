@@ -56,6 +56,12 @@ router.get('/stats', async (req, res, next) => {
     ]);
     const monthlyRevenue = revenueAggregation[0]?.total || 0;
 
+    const paidRevenueAggregation = await Booking.aggregate([
+      { $match: { paymentStatus: { $in: ['paid', 'partial'] } } },
+      { $group: { _id: null, total: { $sum: '$amountPaid' } } }
+    ]);
+    const totalPaidRevenue = paidRevenueAggregation[0]?.total || 0;
+
     const upcomingTrips = await Booking.find({
       pickupDateTime: { $gte: new Date() },
       status: { $ne: 'cancelled' }
@@ -72,6 +78,7 @@ router.get('/stats', async (req, res, next) => {
         confirmedBookings: confirmedCount,
         completedBookings: completedCount,
         monthlyRevenue,
+        totalPaidRevenue,
         upcomingTrips
       }
     });
@@ -83,13 +90,14 @@ router.get('/stats', async (req, res, next) => {
 // GET /api/admin/bookings/export
 router.get('/bookings/export', async (req, res, next) => {
   try {
-    const { status, search, startDate, endDate } = req.query;
+    const { status, paymentStatus, search, startDate, endDate } = req.query;
     const isDbConnected = mongoose.connection.readyState === 1;
 
     let bookings = [];
     if (isDbConnected) {
       const query = {};
       if (status) query.status = status;
+      if (paymentStatus) query.paymentStatus = paymentStatus;
       if (search) {
         query.$or = [
           { referenceCode: new RegExp(search, 'i') },
@@ -108,13 +116,13 @@ router.get('/bookings/export', async (req, res, next) => {
         .sort({ createdAt: -1 });
     }
 
-    let csvHeader = 'Reference Code,Customer Name,Phone,Email,Pickup,Drop,Pickup Date/Time,Trip Type,Vehicle,Passengers,Distance (KM),Fare (INR),Status,Driver Name,Driver Phone\n';
+    let csvHeader = 'Reference Code,Customer Name,Phone,Email,Pickup,Drop,Pickup Date/Time,Trip Type,Vehicle,Passengers,Distance (KM),Fare (INR),Payment Status,Payment Mode,Amount Paid (INR),Status,Driver Name,Driver Phone\n';
     let csvRows = bookings.map((b) => {
       const dateStr = new Date(b.pickupDateTime).toLocaleString().replace(/,/g, '');
       const driverName = b.driver?.name || 'Unassigned';
       const driverPhone = b.driver?.phone || '';
 
-      return `"${b.referenceCode}","${b.customerName}","${b.phone}","${b.email || ''}","${b.pickupLocation.replace(/"/g, '""')}","${b.dropLocation.replace(/"/g, '""')}","${dateStr}","${b.tripType}","${b.vehicleName}",${b.passengers},${b.distanceKm},${b.estimatedFare},"${b.status}","${driverName}","${driverPhone}"`;
+      return `"${b.referenceCode}","${b.customerName}","${b.phone}","${b.email || ''}","${b.pickupLocation.replace(/"/g, '""')}","${b.dropLocation.replace(/"/g, '""')}","${dateStr}","${b.tripType}","${b.vehicleName}",${b.passengers},${b.distanceKm},${b.estimatedFare},"${b.paymentStatus || 'unpaid'}","${b.paymentMode || 'pay_to_driver'}",${b.amountPaid || 0},"${b.status}","${driverName}","${driverPhone}"`;
     }).join('\n');
 
     res.setHeader('Content-Type', 'text/csv');
@@ -128,7 +136,7 @@ router.get('/bookings/export', async (req, res, next) => {
 // GET /api/admin/bookings
 router.get('/bookings', async (req, res, next) => {
   try {
-    const { status, search, startDate, endDate, page = 1, limit = 20 } = req.query;
+    const { status, paymentStatus, search, startDate, endDate, page = 1, limit = 20 } = req.query;
     const isDbConnected = mongoose.connection.readyState === 1;
 
     let bookings = [];
@@ -137,6 +145,7 @@ router.get('/bookings', async (req, res, next) => {
     if (isDbConnected) {
       const query = {};
       if (status) query.status = status;
+      if (paymentStatus) query.paymentStatus = paymentStatus;
       if (search) {
         query.$or = [
           { referenceCode: new RegExp(search, 'i') },
@@ -158,6 +167,7 @@ router.get('/bookings', async (req, res, next) => {
         .skip(skip)
         .limit(parseInt(limit, 10));
     }
+
 
     res.json({
       success: true,
@@ -357,4 +367,91 @@ router.patch('/drivers/:id', async (req, res, next) => {
   }
 });
 
+// POST /api/admin/bookings/:id/refund (Admin Refund)
+router.post('/bookings/:id/refund', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { amount, reason } = req.body;
+    const isDbConnected = mongoose.connection.readyState === 1;
+
+    let booking = null;
+    if (isDbConnected) {
+      booking = await Booking.findById(id);
+    }
+
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking record not found' });
+    }
+
+    const currentPaid = Number(booking.amountPaid) || 0;
+    if (currentPaid <= 0) {
+      return res.status(400).json({ success: false, message: 'No online payment found on this booking to refund' });
+    }
+
+    const refundAmount = amount ? Number(amount) : currentPaid;
+    if (refundAmount <= 0 || refundAmount > currentPaid) {
+      return res.status(400).json({
+        success: false,
+        message: `Refund amount must be positive and cannot exceed total amount paid (₹${currentPaid})`
+      });
+    }
+
+    let refundId = `rfnd_${Date.now()}`;
+    
+    // Attempt Razorpay API refund if razorpayPaymentId exists
+    if (booking.razorpayPaymentId && !booking.razorpayPaymentId.startsWith('pay_mock')) {
+      try {
+        const key_id = process.env.RAZORPAY_KEY_ID || 'rzp_test_samplekey123';
+        const key_secret = process.env.RAZORPAY_KEY_SECRET || 'sample_razorpay_secret_456';
+        
+        // Dynamically import razorpay
+        const { default: Razorpay } = await import('razorpay');
+        const instance = new Razorpay({ key_id, key_secret });
+
+        const razorpayRefund = await instance.payments.refund(booking.razorpayPaymentId, {
+          amount: Math.round(refundAmount * 100),
+          notes: {
+            reason: reason || 'Admin initiated refund',
+            referenceCode: booking.referenceCode
+          }
+        });
+        if (razorpayRefund?.id) {
+          refundId = razorpayRefund.id;
+        }
+      } catch (err) {
+        console.warn(`[Admin Refund] Razorpay refund API warning: ${err.message}. Defaulting to manual refund log.`);
+      }
+    }
+
+    const isFullRefund = refundAmount >= currentPaid;
+    booking.paymentStatus = isFullRefund ? 'refunded' : 'partial';
+    if (!booking.refunds) booking.refunds = [];
+    
+    booking.refunds.push({
+      refundId,
+      amount: refundAmount,
+      status: 'processed',
+      reason: reason || 'Admin initiated refund',
+      createdAt: new Date()
+    });
+
+    await booking.save();
+
+    res.json({
+      success: true,
+      message: `Refund of ₹${refundAmount} processed successfully`,
+      data: {
+        bookingId: booking._id,
+        referenceCode: booking.referenceCode,
+        paymentStatus: booking.paymentStatus,
+        refundId,
+        refundAmount
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;
+

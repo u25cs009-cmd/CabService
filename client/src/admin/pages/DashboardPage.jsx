@@ -61,11 +61,18 @@ export default function DashboardPage() {
     },
     {
       title: 'Monthly Revenue',
-      value: `₹${stats.monthlyRevenue.toLocaleString()}`,
+      value: `₹${(stats.monthlyRevenue || 0).toLocaleString()}`,
       icon: DollarSign,
       color: 'bg-emerald-100 text-emerald-900 border-emerald-300'
+    },
+    {
+      title: 'Online Paid Revenue',
+      value: `₹${(stats.totalPaidRevenue || 0).toLocaleString()}`,
+      icon: TrendingUp,
+      color: 'bg-amber-100 text-amber-900 border-amber-300'
     }
   ];
+
 
   return (
     <AdminLayout title="Dashboard Overview">
@@ -79,7 +86,8 @@ export default function DashboardPage() {
         )}
 
         {/* Metric Cards Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+
           {cards.map((c, i) => {
             const Icon = c.icon;
             return (

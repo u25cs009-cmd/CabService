@@ -6,6 +6,7 @@ import vehicleRoutes from './routes/vehicles.js';
 import fareRoutes from './routes/fare.js';
 import bookingRoutes from './routes/bookings.js';
 import adminRoutes from './routes/admin.js';
+import paymentRoutes from './routes/payments.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 const app = express();
@@ -28,8 +29,14 @@ app.use(
   })
 );
 
-// Body parsing
-app.use(express.json());
+// Body parsing with rawBody capture for webhook HMAC signatures
+app.use(
+  express.json({
+    verify: (req, res, buf) => {
+      req.rawBody = buf;
+    }
+  })
+);
 app.use(express.urlencoded({ extended: true }));
 
 // Health Check route
@@ -47,6 +54,8 @@ app.use('/api/vehicles', vehicleRoutes);
 app.use('/api/fare', fareRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/payments', paymentRoutes);
+
 
 // 404 Handler
 app.use((req, res) => {
