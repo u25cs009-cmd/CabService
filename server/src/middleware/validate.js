@@ -22,7 +22,7 @@ export const createBookingSchema = z.object({
 // Admin Login Schema
 export const loginSchema = z.object({
   email: z.string().email('Valid email is required'),
-  password: z.string().min(6, 'Password must be at least 6 characters')
+  password: z.string().min(1, 'Password is required')
 });
 
 // Admin Booking Update Schema
