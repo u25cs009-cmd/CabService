@@ -106,8 +106,18 @@ export default function FareEstimate({ distanceKm, vehicle, durationMins, breakd
               <span>₹{b.taxAmount}</span>
             </div>
           )}
+
+          {b.discountAmount > 0 && (
+            <div className="flex justify-between text-emerald-700 font-extrabold bg-emerald-50 p-2 rounded-lg border border-emerald-200">
+              <span className="flex items-center gap-1">
+                <Tag className="w-3.5 h-3.5 text-emerald-600" /> Promo Coupon Discount:
+              </span>
+              <span>-₹{b.discountAmount}</span>
+            </div>
+          )}
         </div>
       </div>
+
 
       {/* Final Total Box */}
       <div className="bg-white rounded-xl p-4 border border-amber-300 shadow-xs">

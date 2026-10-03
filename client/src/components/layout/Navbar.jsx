@@ -1,12 +1,9 @@
-import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { Car, Phone, Menu, X, CalendarCheck, ShieldCheck } from 'lucide-react';
-import { siteConfig } from '../../config/site';
-import Button from '../common/Button';
+import { useCustomerAuth } from '../../context/CustomerAuthContext';
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
+  const { customer, isAuthenticated } = useCustomerAuth();
 
   const navLinks = [
     { name: 'Home', path: '/' },
@@ -78,14 +75,27 @@ export default function Navbar() {
             ))}
           </nav>
 
-          {/* Desktop CTA */}
+          {/* Desktop CTA & Account Link */}
           <div className="hidden lg:flex items-center gap-3">
+            {isAuthenticated ? (
+              <Link to="/account">
+                <Button variant="outline" size="md">
+                  My Account ({customer?.name?.split(' ')[0] || 'User'})
+                </Button>
+              </Link>
+            ) : (
+              <Link to="/login" className="text-xs font-bold text-slate-700 hover:text-amber-700 px-3 py-2">
+                Sign In
+              </Link>
+            )}
+
             <Link to="/book">
               <Button variant="primary" size="md" icon={CalendarCheck}>
                 Book Cab Now
               </Button>
             </Link>
           </div>
+
 
           {/* Mobile menu toggle */}
           <div className="flex lg:hidden items-center gap-2">

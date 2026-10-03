@@ -59,6 +59,25 @@ router.post('/estimate', estimateRateLimiter, async (req, res, next) => {
       extraHours
     });
 
+    let finalEstimatedFare = fareResult.estimatedFare;
+    let couponInfo = null;
+
+    if (req.body.couponCode) {
+      const { validateAndApplyCoupon } = await import('../services/couponService.js');
+      const couponRes = await validateAndApplyCoupon({
+        couponCode: req.body.couponCode,
+        estimatedFare: fareResult.estimatedFare
+      });
+      if (couponRes.isValid) {
+        finalEstimatedFare = couponRes.finalFare;
+        couponInfo = {
+          code: couponRes.couponCode,
+          discountAmount: couponRes.discountAmount,
+          message: couponRes.message
+        };
+      }
+    }
+
     res.json({
       success: true,
       data: {
@@ -69,10 +88,16 @@ router.post('/estimate', estimateRateLimiter, async (req, res, next) => {
         routeSource,
         vehicleType: fareResult.vehicleType,
         tripType: fareResult.tripType,
-        estimatedFare: fareResult.estimatedFare,
-        breakdown: fareResult.breakdown
+        originalFare: fareResult.estimatedFare,
+        estimatedFare: finalEstimatedFare,
+        breakdown: {
+          ...fareResult.breakdown,
+          discountAmount: couponInfo ? couponInfo.discountAmount : 0
+        },
+        coupon: couponInfo
       }
     });
+
   } catch (error) {
     next(error);
   }

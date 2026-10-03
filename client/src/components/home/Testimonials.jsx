@@ -1,27 +1,41 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Star, Quote } from 'lucide-react';
 
 export default function Testimonials() {
-  const reviews = [
+  const [reviews, setReviews] = useState([]);
+  const [avgRating, setAvgRating] = useState(4.9);
+
+  useEffect(() => {
+    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+    fetch(`${API_BASE_URL}/reviews/approved`)
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.success && json.data && json.data.length > 0) {
+          setReviews(json.data);
+          if (json.avgRating) setAvgRating(json.avgRating);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const displayReviews = reviews.length > 0 ? reviews : [
     {
-      name: "Amit Malhotra",
-      trip: "Outstation Trip (Sedan)",
+      customerName: 'Amit Malhotra',
       rating: 5,
-      text: "Booked an outstation cab for my family. The Dzire was spotless, AC was great, and driver Ramesh was very courteous. Highly recommended!"
+      comment: 'Booked an outstation cab for my family. The Dzire was spotless, AC was great, and driver Ramesh was very courteous. Highly recommended!'
     },
     {
-      name: "Priya Sharma",
-      trip: "Airport Transfer (Hatchback)",
+      customerName: 'Priya Sharma',
       rating: 5,
-      text: "Super punctual airport pickup at 4 AM! The driver arrived 10 minutes early and helped with all luggage. Smooth ride with zero hassle."
+      comment: 'Super punctual airport pickup at 4 AM! The driver arrived 10 minutes early and helped with all luggage. Smooth ride with zero hassle.'
     },
     {
-      name: "Vikram Sengupta",
-      trip: "Hourly Rental (SUV)",
+      customerName: 'Vikram Sengupta',
       rating: 5,
-      text: "Rented an Innova for an 8-hour business tour across the city. Very transparent billing and excellent vehicle condition."
+      comment: 'Rented an Innova for an 8-hour business tour across the city. Very transparent billing and excellent vehicle condition.'
     }
   ];
+
 
   return (
     <section className="py-16 bg-slate-100 text-slate-900 border-b border-slate-200">
@@ -39,34 +53,35 @@ export default function Testimonials() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {reviews.map((rev, idx) => (
+          {displayReviews.map((rev, idx) => (
             <div key={idx} className="bg-white p-6 rounded-2xl border border-slate-200/90 shadow-sm relative flex flex-col justify-between hover:border-amber-400 transition-colors">
               <Quote className="w-8 h-8 text-amber-500/20 absolute top-4 right-4" />
               
               <div className="space-y-3 relative z-10">
                 <div className="flex items-center gap-1">
-                  {[...Array(rev.rating)].map((_, i) => (
+                  {[...Array(rev.rating || 5)].map((_, i) => (
                     <Star key={i} className="w-4 h-4 fill-amber-400 text-amber-400" />
                   ))}
                 </div>
 
                 <p className="text-xs sm:text-sm text-slate-700 italic leading-relaxed font-medium">
-                  "{rev.text}"
+                  "{rev.comment || rev.text}"
                 </p>
               </div>
 
               <div className="pt-4 border-t border-slate-100 mt-4 flex items-center gap-3">
                 <div className="w-9 h-9 rounded-full bg-amber-500/15 text-amber-800 flex items-center justify-center font-bold text-xs">
-                  {rev.name.charAt(0)}
+                  {(rev.customerName || rev.name || 'C').charAt(0)}
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-slate-900">{rev.name}</h4>
-                  <span className="text-[11px] text-slate-500 font-medium block">{rev.trip}</span>
+                  <h4 className="text-sm font-bold text-slate-900">{rev.customerName || rev.name}</h4>
+                  <span className="text-[11px] text-slate-500 font-medium block">Verified Passenger</span>
                 </div>
               </div>
             </div>
           ))}
         </div>
+
       </div>
     </section>
   );
