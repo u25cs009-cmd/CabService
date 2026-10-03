@@ -25,7 +25,7 @@ router.post('/login', loginRateLimiter, validateBody(loginSchema), async (req, r
     } else {
       // Fallback admin check against environment variables
       const envAdminEmail = (process.env.ADMIN_EMAIL || 'admin@pipippip.com').toLowerCase();
-      const envAdminPass = process.env.ADMIN_PASSWORD || 'AdminSecurePassword123!';
+      const envAdminPass = process.env.ADMIN_PASSWORD || '12345';
 
       if (email.toLowerCase() === envAdminEmail && password === envAdminPass) {
         user = {
