@@ -98,10 +98,39 @@ const bookingSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['pending', 'confirmed', 'assigned', 'completed', 'cancelled'],
+      enum: ['pending', 'confirmed', 'offered', 'assigned', 'on_the_way', 'arrived', 'in_progress', 'completed', 'cancelled', 'needs_manual_assignment'],
       default: 'pending',
       index: true
     },
+    otpCode: {
+      type: String,
+      default: ''
+    },
+    assignedDriverOffer: {
+      driver: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Driver',
+        default: null
+      },
+      offerExpiresAt: {
+        type: Date,
+        default: null
+      },
+      declinedDrivers: [
+        {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'Driver'
+        }
+      ]
+    },
+    statusHistory: [
+      {
+        status: { type: String, required: true },
+        changedBy: { type: String, default: 'system' }, // system, admin, driver, customer
+        timestamp: { type: Date, default: Date.now },
+        note: { type: String, default: '' }
+      }
+    ],
     driver: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Driver',

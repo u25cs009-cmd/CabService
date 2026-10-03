@@ -8,8 +8,8 @@ import { bookingRateLimiter } from '../middleware/rateLimiter.js';
 import { getRouteDetails } from '../services/mapsService.js';
 import { calculateAdvancedFare } from '../services/fareService.js';
 import { sendOwnerBookingNotification } from '../services/emailService.js';
-
 import { optionalCustomer } from '../middleware/authCustomer.js';
+import { findAndOfferNextDriver } from '../services/dispatchService.js';
 
 const router = express.Router();
 
@@ -137,6 +137,11 @@ router.post('/', bookingRateLimiter, optionalCustomer, validateBody(createBookin
         vehicle: vehicleDoc?._id || null
       });
       await booking.save();
+      
+      // Trigger auto dispatch match
+      findAndOfferNextDriver(booking._id).catch((err) => {
+        console.error(`Automated dispatch failed: ${err.message}`);
+      });
     } else {
       inMemoryBookings.set(referenceCode, bookingPayload);
     }

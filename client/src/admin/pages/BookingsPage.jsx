@@ -200,8 +200,13 @@ export default function BookingsPage() {
               options={[
                 { value: '', label: 'All Trip Statuses' },
                 { value: 'pending', label: 'Pending' },
+                { value: 'offered', label: 'Offered to Driver' },
+                { value: 'needs_manual_assignment', label: 'Needs Manual Assignment' },
                 { value: 'confirmed', label: 'Confirmed' },
                 { value: 'assigned', label: 'Driver Assigned' },
+                { value: 'on_the_way', label: 'On The Way' },
+                { value: 'arrived', label: 'Arrived' },
+                { value: 'in_progress', label: 'In Progress' },
                 { value: 'completed', label: 'Completed' },
                 { value: 'cancelled', label: 'Cancelled' }
               ]}
@@ -441,18 +446,44 @@ export default function BookingsPage() {
               <div className="border-t border-slate-100 pt-4 space-y-3">
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Status & Payment Actions</h4>
                 <div className="flex flex-wrap gap-2">
-                  {selectedBooking.status === 'pending' && (
+                  {['pending', 'confirmed', 'needs_manual_assignment'].includes(selectedBooking.status) && (
                     <Button
                       variant="primary"
                       size="sm"
                       disabled={actionLoading}
-                      onClick={() => handleUpdateStatus(selectedBooking._id, 'confirmed')}
+                      onClick={async () => {
+                        setActionLoading(true);
+                        try {
+                          const res = await fetch(`/api/admin/bookings/${selectedBooking._id}/dispatch`, {
+                            method: 'POST',
+                            headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` }
+                          });
+                          const data = await res.json();
+                          alert(data.message);
+                          fetchBookings();
+                          setDetailModalOpen(false);
+                        } catch (err) {
+                          alert('Auto dispatch failed.');
+                        } finally {
+                          setActionLoading(false);
+                        }
+                      }}
                       icon={CheckCircle}
+                    >
+                      Trigger Auto Dispatch
+                    </Button>
+                  )}
+                  {selectedBooking.status === 'pending' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={actionLoading}
+                      onClick={() => handleUpdateStatus(selectedBooking._id, 'confirmed')}
                     >
                       Confirm Booking
                     </Button>
                   )}
-                  {['confirmed', 'assigned'].includes(selectedBooking.status) && (
+                  {['confirmed', 'assigned', 'in_progress'].includes(selectedBooking.status) && (
                     <Button
                       variant="emerald"
                       size="sm"
@@ -477,7 +508,7 @@ export default function BookingsPage() {
                       Issue Razorpay Refund
                     </Button>
                   )}
-                  {['pending', 'confirmed', 'assigned'].includes(selectedBooking.status) && (
+                  {['pending', 'confirmed', 'offered', 'assigned', 'needs_manual_assignment'].includes(selectedBooking.status) && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -496,9 +527,9 @@ export default function BookingsPage() {
               </div>
 
               {/* Assign Driver */}
-              {['confirmed', 'pending'].includes(selectedBooking.status) && (
+              {['confirmed', 'pending', 'needs_manual_assignment'].includes(selectedBooking.status) && (
                 <div className="border-t border-slate-100 pt-4 space-y-3">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Assign Chauffeur / Driver</h4>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Manual Chauffeur / Driver Override</h4>
                   <div className="flex items-center gap-2">
                     <Select
                       id="driver-select"
@@ -519,6 +550,25 @@ export default function BookingsPage() {
                     >
                       Assign
                     </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Status Audit History Log */}
+              {selectedBooking.statusHistory && selectedBooking.statusHistory.length > 0 && (
+                <div className="border-t border-slate-100 pt-4 space-y-2">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Status Audit History Log</h4>
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 max-h-40 overflow-y-auto space-y-2 text-[11px]">
+                    {selectedBooking.statusHistory.map((h, index) => (
+                      <div key={index} className="flex justify-between items-start border-b border-slate-200/60 pb-1.5 last:border-0 last:pb-0">
+                        <div>
+                          <span className="font-bold text-slate-800 uppercase">{h.status}</span>
+                          <span className="text-slate-500 font-medium ml-2">by {h.changedBy}</span>
+                          {h.note && <div className="text-slate-600 italic text-[10px]">{h.note}</div>}
+                        </div>
+                        <span className="text-slate-400 text-[10px] whitespace-nowrap">{new Date(h.timestamp).toLocaleTimeString()}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
