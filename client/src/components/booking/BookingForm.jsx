@@ -69,8 +69,11 @@ export default function BookingForm() {
     passengers: '1',
     distanceKm: '15',
     paymentOption: 'driver',
+    couponCode: '',
     notes: ''
   });
+
+  const [couponMessage, setCouponMessage] = useState('');
 
   const [fareData, setFareData] = useState({
     distanceKm: 15,
@@ -87,7 +90,6 @@ export default function BookingForm() {
   const [paymentDetails, setPaymentDetails] = useState(null);
   const [paymentError, setPaymentError] = useState('');
   const [showReceiptModal, setShowReceiptModal] = useState(false);
-
 
   useEffect(() => {
     fetchVehicles().then((data) => {
@@ -125,7 +127,8 @@ export default function BookingForm() {
           dateTime: `${formData.date}T${formData.time}:00`,
           packageId: formData.packageId,
           isRoundTrip: formData.isRoundTrip,
-          distanceKm: formData.distanceKm
+          distanceKm: formData.distanceKm,
+          couponCode: formData.couponCode
         })
       })
         .then((res) => res.json())
@@ -137,6 +140,9 @@ export default function BookingForm() {
               estimatedFare: json.data.estimatedFare,
               breakdown: json.data.breakdown
             });
+            if (json.data.coupon) {
+              setCouponMessage(json.data.coupon.message);
+            }
           }
         })
         .catch(() => {});
@@ -155,8 +161,10 @@ export default function BookingForm() {
     formData.packageId,
     formData.isRoundTrip,
     formData.distanceKm,
+    formData.couponCode,
     selectedVehicle
   ]);
+
 
   const validate = (data = formData) => {
     const errs = {};
@@ -546,15 +554,32 @@ export default function BookingForm() {
                   />
                 </div>
 
-                <Input
-                  id="notes"
-                  label="Special Notes (Optional)"
-                  placeholder="e.g. Flight number, extra luggage space"
-                  value={formData.notes}
-                  onChange={handleChange}
-                  icon={FileText}
-                />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+                  <Input
+                    id="couponCode"
+                    label="Promo / Discount Coupon"
+                    placeholder="e.g. WELCOME10"
+                    value={formData.couponCode}
+                    onChange={(e) => {
+                      const val = e.target.value.toUpperCase();
+                      setFormData((prev) => ({ ...prev, couponCode: val }));
+                      if (!val) setCouponMessage('');
+                    }}
+                    icon={Ticket}
+                    helperText={couponMessage || 'Try code WELCOME10 for 10% OFF'}
+                  />
+
+                  <Input
+                    id="notes"
+                    label="Special Notes (Optional)"
+                    placeholder="e.g. Flight number, extra luggage space"
+                    value={formData.notes}
+                    onChange={handleChange}
+                    icon={FileText}
+                  />
+                </div>
               </div>
+
 
               {/* Section 3: Payment Options (Razorpay Test Mode) */}
               <div className="space-y-3 pt-3 border-t border-slate-100">

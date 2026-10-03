@@ -107,6 +107,22 @@ const bookingSchema = new mongoose.Schema(
       ref: 'Driver',
       default: null
     },
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+      index: true
+    },
+    couponCode: {
+      type: String,
+      default: '',
+      uppercase: true,
+      trim: true
+    },
+    discountAmount: {
+      type: Number,
+      default: 0
+    },
     notes: {
       type: String,
       default: ''

@@ -453,5 +453,87 @@ router.post('/bookings/:id/refund', async (req, res, next) => {
   }
 });
 
+// ADMIN COUPONS ENDPOINTS
+router.get('/coupons', async (req, res, next) => {
+  try {
+    const isDbConnected = mongoose.connection.readyState === 1;
+    let coupons = [];
+    if (isDbConnected) {
+      const { default: Coupon } = await import('../models/Coupon.js');
+      coupons = await Coupon.find().sort({ createdAt: -1 });
+    }
+    res.json({ success: true, count: coupons.length, data: coupons });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/coupons', async (req, res, next) => {
+  try {
+    const { default: Coupon } = await import('../models/Coupon.js');
+    const { code, discountType, discountValue, maxDiscount, minFare, validTo, usageLimit, perUserLimit } = req.body;
+
+    const coupon = new Coupon({
+      code: String(code).toUpperCase().trim(),
+      discountType: discountType || 'percent',
+      discountValue: Number(discountValue) || 0,
+      maxDiscount: Number(maxDiscount) || 0,
+      minFare: Number(minFare) || 0,
+      validTo: validTo ? new Date(validTo) : undefined,
+      usageLimit: Number(usageLimit) || 100,
+      perUserLimit: Number(perUserLimit) || 1
+    });
+    await coupon.save();
+
+    res.status(201).json({ success: true, message: 'Coupon created successfully', data: coupon });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch('/coupons/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { default: Coupon } = await import('../models/Coupon.js');
+    const coupon = await Coupon.findByIdAndUpdate(id, req.body, { new: true });
+    if (!coupon) {
+      return res.status(404).json({ success: false, message: 'Coupon not found' });
+    }
+    res.json({ success: true, message: 'Coupon updated successfully', data: coupon });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ADMIN REVIEWS ENDPOINTS
+router.get('/reviews', async (req, res, next) => {
+  try {
+    const isDbConnected = mongoose.connection.readyState === 1;
+    let reviews = [];
+    if (isDbConnected) {
+      const { default: Review } = await import('../models/Review.js');
+      reviews = await Review.find().sort({ createdAt: -1 });
+    }
+    res.json({ success: true, count: reviews.length, data: reviews });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch('/reviews/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { default: Review } = await import('../models/Review.js');
+    const review = await Review.findByIdAndUpdate(id, req.body, { new: true });
+    if (!review) {
+      return res.status(404).json({ success: false, message: 'Review not found' });
+    }
+    res.json({ success: true, message: 'Review status updated successfully', data: review });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;
+
 

@@ -9,6 +9,8 @@ import { getRouteDetails } from '../services/mapsService.js';
 import { calculateAdvancedFare } from '../services/fareService.js';
 import { sendOwnerBookingNotification } from '../services/emailService.js';
 
+import { optionalCustomer } from '../middleware/authCustomer.js';
+
 const router = express.Router();
 
 function generateReferenceCode() {
@@ -22,8 +24,8 @@ function generateReferenceCode() {
 
 const inMemoryBookings = new Map();
 
-// POST /api/bookings (Public - Create Cab Booking)
-router.post('/', bookingRateLimiter, validateBody(createBookingSchema), async (req, res, next) => {
+// POST /api/bookings (Public / Optional Customer - Create Cab Booking)
+router.post('/', bookingRateLimiter, optionalCustomer, validateBody(createBookingSchema), async (req, res, next) => {
   try {
     const data = req.validatedData;
     const isDbConnected = mongoose.connection.readyState === 1;
@@ -65,6 +67,30 @@ router.post('/', bookingRateLimiter, validateBody(createBookingSchema), async (r
       extraHours: req.body.extraHours || 0
     });
 
+    let finalFare = fareResult.estimatedFare;
+    let discountAmount = 0;
+    let appliedCoupon = '';
+
+    if (req.body.couponCode) {
+      const { validateAndApplyCoupon } = await import('../services/couponService.js');
+      const couponRes = await validateAndApplyCoupon({
+        couponCode: req.body.couponCode,
+        estimatedFare: fareResult.estimatedFare,
+        userId: req.user?._id || null
+      });
+
+      if (couponRes.isValid) {
+        finalFare = couponRes.finalFare;
+        discountAmount = couponRes.discountAmount;
+        appliedCoupon = couponRes.couponCode;
+
+        if (isDbConnected) {
+          const { default: Coupon } = await import('../models/Coupon.js');
+          await Coupon.updateOne({ code: appliedCoupon }, { $inc: { usedCount: 1 } });
+        }
+      }
+    }
+
     const referenceCode = generateReferenceCode();
 
     const payOption = data.paymentOption || 'driver';
@@ -74,7 +100,8 @@ router.post('/', bookingRateLimiter, validateBody(createBookingSchema), async (r
       referenceCode,
       customerName: data.name,
       phone: data.phone,
-      email: data.email || '',
+      email: data.email || (req.user?.email || ''),
+      user: req.user?._id || null,
       pickupLocation: data.pickup,
       dropLocation: data.drop,
       pickupCoords: req.body.pickupCoords || null,
@@ -87,8 +114,14 @@ router.post('/', bookingRateLimiter, validateBody(createBookingSchema), async (r
       passengers: data.passengers,
       distanceKm: fareResult.distanceKm,
       durationMins,
-      estimatedFare: fareResult.estimatedFare,
-      fareBreakdown: fareResult.breakdown,
+      estimatedFare: finalFare,
+      couponCode: appliedCoupon,
+      discountAmount,
+      fareBreakdown: {
+        ...fareResult.breakdown,
+        discountAmount,
+        totalFare: finalFare
+      },
       status: 'pending',
       paymentStatus: 'unpaid',
       paymentMode: payMode,
@@ -96,6 +129,7 @@ router.post('/', bookingRateLimiter, validateBody(createBookingSchema), async (r
       amountPaid: 0,
       notes: data.notes || ''
     };
+
 
     if (isDbConnected) {
       const booking = new Booking({

@@ -7,6 +7,9 @@ import fareRoutes from './routes/fare.js';
 import bookingRoutes from './routes/bookings.js';
 import adminRoutes from './routes/admin.js';
 import paymentRoutes from './routes/payments.js';
+import customerRoutes from './routes/customer.js';
+import couponRoutes from './routes/coupons.js';
+import reviewRoutes from './routes/reviews.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 const app = express();
@@ -55,6 +58,10 @@ app.use('/api/fare', fareRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/customer', customerRoutes);
+app.use('/api/coupons', couponRoutes);
+app.use('/api/reviews', reviewRoutes);
+
 
 
 // 404 Handler

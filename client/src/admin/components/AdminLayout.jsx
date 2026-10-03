@@ -11,7 +11,9 @@ import {
   ShieldCheck,
   User,
   ChevronRight,
-  Calculator
+  Calculator,
+  Tag,
+  Star
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { siteConfig } from '../../config/site';
@@ -27,8 +29,11 @@ export default function AdminLayout({ children, title }) {
     { name: 'Bookings', path: '/admin/bookings', icon: CalendarCheck },
     { name: 'Vehicles Fleet', path: '/admin/vehicles', icon: Car },
     { name: 'Driver Roster', path: '/admin/drivers', icon: Users },
-    { name: 'Fare Rules', path: '/admin/fare-rules', icon: Calculator }
+    { name: 'Fare Rules', path: '/admin/fare-rules', icon: Calculator },
+    { name: 'Coupons', path: '/admin/coupons', icon: Tag },
+    { name: 'Reviews', path: '/admin/reviews', icon: Star }
   ];
+
 
   const isActive = (path) => {
     if (path === '/admin') return location.pathname === '/admin';
