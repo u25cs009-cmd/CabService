@@ -11,6 +11,9 @@ import customerRoutes from './routes/customer.js';
 import couponRoutes from './routes/coupons.js';
 import reviewRoutes from './routes/reviews.js';
 import driverRoutes from './routes/driver.js';
+import companyRoutes from './routes/company.js';
+import invoiceRoutes from './routes/invoice.js';
+import analyticsRoutes from './routes/analytics.js';
 import { startDispatchCron } from './services/dispatchService.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
@@ -67,6 +70,10 @@ app.use('/api/customer', customerRoutes);
 app.use('/api/coupons', couponRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/driver', driverRoutes);
+app.use('/api/admin/companies', companyRoutes);
+app.use('/api/customer/company-status', companyRoutes);
+app.use('/api/admin/invoices', invoiceRoutes);
+app.use('/api/admin/analytics', analyticsRoutes);
 
 
 

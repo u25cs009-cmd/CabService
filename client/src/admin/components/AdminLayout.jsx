@@ -14,7 +14,10 @@ import {
   Calculator,
   Tag,
   Star,
-  MapPin
+  MapPin,
+  BarChart3,
+  Building,
+  FileText
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { siteConfig } from '../../config/site';
@@ -27,8 +30,11 @@ export default function AdminLayout({ children, title }) {
 
   const navItems = [
     { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
+    { name: 'Executive Analytics', path: '/admin/analytics', icon: BarChart3 },
     { name: 'Live Operations Map', path: '/admin/live-map', icon: MapPin },
     { name: 'Bookings', path: '/admin/bookings', icon: CalendarCheck },
+    { name: 'Corporate Accounts', path: '/admin/companies', icon: Building },
+    { name: 'Monthly Invoices', path: '/admin/invoices', icon: FileText },
     { name: 'Vehicles Fleet', path: '/admin/vehicles', icon: Car },
     { name: 'Driver Roster', path: '/admin/drivers', icon: Users },
     { name: 'Fare Rules', path: '/admin/fare-rules', icon: Calculator },
