@@ -10,7 +10,8 @@ import {
   X,
   ShieldCheck,
   User,
-  ChevronRight
+  ChevronRight,
+  Calculator
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { siteConfig } from '../../config/site';
@@ -25,7 +26,8 @@ export default function AdminLayout({ children, title }) {
     { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
     { name: 'Bookings', path: '/admin/bookings', icon: CalendarCheck },
     { name: 'Vehicles Fleet', path: '/admin/vehicles', icon: Car },
-    { name: 'Driver Roster', path: '/admin/drivers', icon: Users }
+    { name: 'Driver Roster', path: '/admin/drivers', icon: Users },
+    { name: 'Fare Rules', path: '/admin/fare-rules', icon: Calculator }
   ];
 
   const isActive = (path) => {
@@ -42,7 +44,6 @@ export default function AdminLayout({ children, title }) {
     <div className="min-h-screen flex bg-slate-100 text-slate-900 font-sans">
       {/* Sidebar for Desktop */}
       <aside className="hidden lg:flex flex-col w-64 bg-slate-900 text-slate-300 border-r border-slate-800 shrink-0">
-        {/* Brand */}
         <div className="p-5 border-b border-slate-800 flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 font-bold flex items-center justify-center">
             <Car className="w-5 h-5" />
@@ -53,7 +54,6 @@ export default function AdminLayout({ children, title }) {
           </div>
         </div>
 
-        {/* Nav Links */}
         <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -78,7 +78,6 @@ export default function AdminLayout({ children, title }) {
           })}
         </nav>
 
-        {/* Admin Footer */}
         <div className="p-4 border-t border-slate-800 bg-slate-950/60 text-xs text-slate-400 flex items-center justify-between">
           <div className="flex items-center gap-2 overflow-hidden">
             <User className="w-4 h-4 text-amber-400 shrink-0" />
@@ -143,9 +142,8 @@ export default function AdminLayout({ children, title }) {
         </div>
       )}
 
-      {/* Main Content Container */}
+      {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Top Header */}
         <header className="bg-white border-b border-slate-200 h-16 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 shadow-xs">
           <div className="flex items-center gap-3">
             <button
@@ -174,7 +172,6 @@ export default function AdminLayout({ children, title }) {
           </div>
         </header>
 
-        {/* Main Body */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">{children}</main>
       </div>
     </div>

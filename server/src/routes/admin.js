@@ -3,15 +3,14 @@ import mongoose from 'mongoose';
 import Booking from '../models/Booking.js';
 import Vehicle from '../models/Vehicle.js';
 import Driver from '../models/Driver.js';
+import FareRule from '../models/FareRule.js';
 import { requireAdmin } from '../middleware/auth.js';
 import { sendCustomerBookingUpdate } from '../services/emailService.js';
 
 const router = express.Router();
 
-// Enforce Admin Authentication Middleware
 router.use(requireAdmin);
 
-// Valid status transitions map
 const VALID_TRANSITIONS = {
   pending: ['confirmed', 'cancelled'],
   confirmed: ['assigned', 'completed', 'cancelled'],
@@ -20,7 +19,7 @@ const VALID_TRANSITIONS = {
   cancelled: []
 };
 
-// GET /api/admin/stats (Dashboard Overview & Stats)
+// GET /api/admin/stats
 router.get('/stats', async (req, res, next) => {
   try {
     const isDbConnected = mongoose.connection.readyState === 1;
@@ -51,24 +50,12 @@ router.get('/stats', async (req, res, next) => {
     const confirmedCount = await Booking.countDocuments({ status: { $in: ['confirmed', 'assigned'] } });
     const completedCount = await Booking.countDocuments({ status: 'completed' });
 
-    // Sum monthly revenue for completed bookings
     const revenueAggregation = await Booking.aggregate([
-      {
-        $match: {
-          status: 'completed',
-          updatedAt: { $gte: monthStart }
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          total: { $sum: '$estimatedFare' }
-        }
-      }
+      { $match: { status: 'completed', updatedAt: { $gte: monthStart } } },
+      { $group: { _id: null, total: { $sum: '$estimatedFare' } } }
     ]);
     const monthlyRevenue = revenueAggregation[0]?.total || 0;
 
-    // Upcoming 5 trips
     const upcomingTrips = await Booking.find({
       pickupDateTime: { $gte: new Date() },
       status: { $ne: 'cancelled' }
@@ -93,7 +80,7 @@ router.get('/stats', async (req, res, next) => {
   }
 });
 
-// GET /api/admin/bookings/export (CSV Download)
+// GET /api/admin/bookings/export
 router.get('/bookings/export', async (req, res, next) => {
   try {
     const { status, search, startDate, endDate } = req.query;
@@ -121,7 +108,6 @@ router.get('/bookings/export', async (req, res, next) => {
         .sort({ createdAt: -1 });
     }
 
-    // Generate CSV Content
     let csvHeader = 'Reference Code,Customer Name,Phone,Email,Pickup,Drop,Pickup Date/Time,Trip Type,Vehicle,Passengers,Distance (KM),Fare (INR),Status,Driver Name,Driver Phone\n';
     let csvRows = bookings.map((b) => {
       const dateStr = new Date(b.pickupDateTime).toLocaleString().replace(/,/g, '');
@@ -139,7 +125,7 @@ router.get('/bookings/export', async (req, res, next) => {
   }
 });
 
-// GET /api/admin/bookings (Paginated Bookings List)
+// GET /api/admin/bookings
 router.get('/bookings', async (req, res, next) => {
   try {
     const { status, search, startDate, endDate, page = 1, limit = 20 } = req.query;
@@ -186,7 +172,7 @@ router.get('/bookings', async (req, res, next) => {
   }
 });
 
-// PATCH /api/admin/bookings/:id (Update status / Assign driver / Notes)
+// PATCH /api/admin/bookings/:id
 router.patch('/bookings/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -203,13 +189,9 @@ router.patch('/bookings/:id', async (req, res, next) => {
 
     const booking = await Booking.findById(id);
     if (!booking) {
-      return res.status(404).json({
-        success: false,
-        message: 'Booking record not found'
-      });
+      return res.status(404).json({ success: false, message: 'Booking record not found' });
     }
 
-    // Validate Status Transition Logic
     if (status && status !== booking.status) {
       const allowedNextStatuses = VALID_TRANSITIONS[booking.status] || [];
       if (!allowedNextStatuses.includes(status)) {
@@ -231,7 +213,6 @@ router.patch('/bookings/:id', async (req, res, next) => {
       if (assignedDriver) {
         booking.driver = assignedDriver._id;
         booking.status = 'assigned';
-        // Mark driver status as on_trip
         assignedDriver.status = 'on_trip';
         await assignedDriver.save();
       }
@@ -239,7 +220,6 @@ router.patch('/bookings/:id', async (req, res, next) => {
 
     await booking.save();
 
-    // Trigger Customer Email Update Notification asynchronously
     sendCustomerBookingUpdate(booking, assignedDriver).catch((err) => {
       console.error(`Background customer email task failed: ${err.message}`);
     });
@@ -254,8 +234,36 @@ router.patch('/bookings/:id', async (req, res, next) => {
   }
 });
 
+// FARE RULES ENDPOINTS
+// GET /api/admin/fare-rules
+router.get('/fare-rules', async (req, res, next) => {
+  try {
+    const isDbConnected = mongoose.connection.readyState === 1;
+    let rules = [];
+    if (isDbConnected) {
+      rules = await FareRule.find();
+    }
+    res.json({ success: true, count: rules.length, data: rules });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// PATCH /api/admin/fare-rules/:id
+router.patch('/fare-rules/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const rule = await FareRule.findByIdAndUpdate(id, req.body, { new: true });
+    if (!rule) {
+      return res.status(404).json({ success: false, message: 'Fare rule not found' });
+    }
+    res.json({ success: true, message: 'Fare rule updated successfully', data: rule });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // VEHICLE MANAGEMENT ENDPOINTS
-// GET /api/admin/vehicles
 router.get('/vehicles', async (req, res, next) => {
   try {
     const isDbConnected = mongoose.connection.readyState === 1;
@@ -269,7 +277,6 @@ router.get('/vehicles', async (req, res, next) => {
   }
 });
 
-// POST /api/admin/vehicles
 router.post('/vehicles', async (req, res, next) => {
   try {
     const { vehicleId, name, type, models, seats, luggageCapacity, ratePerKm, baseFare, badge, description } = req.body;
@@ -293,7 +300,6 @@ router.post('/vehicles', async (req, res, next) => {
   }
 });
 
-// PATCH /api/admin/vehicles/:id
 router.patch('/vehicles/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -308,7 +314,6 @@ router.patch('/vehicles/:id', async (req, res, next) => {
 });
 
 // DRIVER MANAGEMENT ENDPOINTS
-// GET /api/admin/drivers
 router.get('/drivers', async (req, res, next) => {
   try {
     const isDbConnected = mongoose.connection.readyState === 1;
@@ -322,7 +327,6 @@ router.get('/drivers', async (req, res, next) => {
   }
 });
 
-// POST /api/admin/drivers
 router.post('/drivers', async (req, res, next) => {
   try {
     const { name, phone, licenseNo, vehicleNumber, status } = req.body;
@@ -340,7 +344,6 @@ router.post('/drivers', async (req, res, next) => {
   }
 });
 
-// PATCH /api/admin/drivers/:id
 router.patch('/drivers/:id', async (req, res, next) => {
   try {
     const { id } = req.params;

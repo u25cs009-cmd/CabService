@@ -19,6 +19,7 @@ import DashboardPage from './admin/pages/DashboardPage';
 import BookingsPage from './admin/pages/BookingsPage';
 import VehiclesAdminPage from './admin/pages/VehiclesAdminPage';
 import DriversAdminPage from './admin/pages/DriversAdminPage';
+import FareRulesAdminPage from './admin/pages/FareRulesAdminPage';
 
 export default function App() {
   return (
@@ -65,6 +66,14 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <DriversAdminPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/fare-rules"
+              element={
+                <ProtectedRoute>
+                  <FareRulesAdminPage />
                 </ProtectedRoute>
               }
             />
