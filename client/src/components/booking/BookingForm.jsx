@@ -16,7 +16,10 @@ import {
   Ticket,
   MessageCircle,
   Repeat,
-  Package
+  Package,
+  CreditCard,
+  Printer,
+  ShieldCheck
 } from 'lucide-react';
 import Input from '../common/Input';
 import Select from '../common/Select';
@@ -25,9 +28,11 @@ import Card from '../common/Card';
 import FareEstimate from './FareEstimate';
 import MapPreview from './MapPreview';
 import LocationAutocomplete from './LocationAutocomplete';
+import ReceiptModal from './ReceiptModal';
 import { vehiclesData as localVehicles } from '../../data/vehicles';
 import { servicesData } from '../../data/services';
 import { submitBooking, fetchVehicles, openWhatsAppFallback } from '../../services/api';
+import { initiateRazorpayPayment } from '../../services/razorpayService';
 
 const HOURLY_PACKAGES = [
   { value: '4hr_40km', label: '4 Hours / 40 KM Package' },
@@ -63,6 +68,7 @@ export default function BookingForm() {
     vehicleType: initialVehicleId,
     passengers: '1',
     distanceKm: '15',
+    paymentOption: 'driver',
     notes: ''
   });
 
@@ -78,6 +84,10 @@ export default function BookingForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [savedReferenceCode, setSavedReferenceCode] = useState(null);
+  const [paymentDetails, setPaymentDetails] = useState(null);
+  const [paymentError, setPaymentError] = useState('');
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+
 
   useEffect(() => {
     fetchVehicles().then((data) => {
@@ -204,13 +214,55 @@ export default function BookingForm() {
     };
 
     const result = await submitBooking(bookingPayload);
-    setIsSubmitting(false);
 
-    if (result.success) {
+    if (!result.success) {
+      setIsSubmitting(false);
+      setPaymentError(result.message || 'Failed to submit booking request.');
+      return;
+    }
+
+    setSavedReferenceCode(result.referenceCode);
+
+    if (formData.paymentOption === 'full' || formData.paymentOption === 'advance') {
+      try {
+        const verifyResult = await initiateRazorpayPayment({
+          referenceCode: result.referenceCode,
+          paymentOption: formData.paymentOption
+        });
+        setPaymentDetails(verifyResult.data);
+        setSubmitSuccess(true);
+      } catch (err) {
+        console.error('Payment checkout error:', err);
+        setPaymentError(`Note: ${err.message}. Your booking reference #${result.referenceCode} is registered as unpaid (Pay to Driver fallback).`);
+        setSubmitSuccess(true);
+      } finally {
+        setIsSubmitting(false);
+      }
+    } else {
+      setIsSubmitting(false);
       setSubmitSuccess(true);
-      setSavedReferenceCode(result.referenceCode);
     }
   };
+
+  const currentBookingForReceipt = savedReferenceCode ? {
+    referenceCode: savedReferenceCode,
+    customerName: formData.name,
+    phone: formData.phone,
+    email: formData.email,
+    pickupLocation: formData.pickup,
+    dropLocation: formData.drop,
+    pickupDateTime: `${formData.date}T${formData.time}:00`,
+    tripType: formData.tripType,
+    vehicleName: selectedVehicle.name || 'Cab',
+    passengers: formData.passengers,
+    distanceKm: fareData.distanceKm,
+    estimatedFare: fareData.estimatedFare,
+    fareBreakdown: fareData.breakdown,
+    paymentStatus: paymentDetails?.paymentStatus || (formData.paymentOption === 'driver' ? 'unpaid' : (paymentError ? 'unpaid' : 'paid')),
+    amountPaid: paymentDetails?.amountPaid || (formData.paymentOption === 'full' ? fareData.estimatedFare : (formData.paymentOption === 'advance' ? Math.round((fareData.estimatedFare * 20) / 100) : 0)),
+    razorpayPaymentId: paymentDetails?.razorpayPaymentId || '',
+    createdAt: new Date().toISOString()
+  } : null;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -223,7 +275,7 @@ export default function BookingForm() {
             </div>
             <div>
               <h3 className="text-xl font-bold text-slate-900">Cab Ride Reservation</h3>
-              <p className="text-xs text-slate-500 font-medium">Maps Places Autocomplete & Server Calculated Fare</p>
+              <p className="text-xs text-slate-500 font-medium">Maps Autocomplete & Razorpay Online Payment</p>
             </div>
           </div>
 
@@ -243,17 +295,31 @@ export default function BookingForm() {
                 )}
               </div>
 
+              {paymentError && (
+                <div className="p-3 bg-amber-100/70 border border-amber-200 rounded-xl text-xs text-amber-900 font-medium">
+                  {paymentError}
+                </div>
+              )}
+
               <p className="text-xs sm:text-sm text-emerald-800 leading-relaxed font-medium">
-                Your booking request has been saved and dispatched to our 24/7 dispatch desk.
+                Your booking request has been saved and dispatched to our 24/7 dispatch desk. An email receipt has been sent if provided.
               </p>
 
-              <div className="pt-3 flex flex-col sm:flex-row items-center justify-center gap-3">
+              <div className="pt-3 flex flex-wrap items-center justify-center gap-3">
                 <Button
                   variant="emerald"
                   onClick={() => openWhatsAppFallback(formData, savedReferenceCode)}
                   icon={MessageCircle}
                 >
-                  Send Details on WhatsApp
+                  WhatsApp Confirmation
+                </Button>
+
+                <Button
+                  variant="primary"
+                  onClick={() => setShowReceiptModal(true)}
+                  icon={Printer}
+                >
+                  View / Print Receipt
                 </Button>
 
                 <Button
@@ -261,6 +327,8 @@ export default function BookingForm() {
                   onClick={() => {
                     setSubmitSuccess(false);
                     setSavedReferenceCode(null);
+                    setPaymentDetails(null);
+                    setPaymentError('');
                     setFormData((prev) => ({ ...prev, pickup: '', drop: '', notes: '' }));
                     setTouched({});
                   }}
@@ -270,6 +338,7 @@ export default function BookingForm() {
               </div>
             </div>
           ) : (
+
             <form onSubmit={handleSubmit} noValidate className="space-y-5">
               {/* Trip Type Tabs */}
               <div className="space-y-2">
@@ -487,6 +556,64 @@ export default function BookingForm() {
                 />
               </div>
 
+              {/* Section 3: Payment Options (Razorpay Test Mode) */}
+              <div className="space-y-3 pt-3 border-t border-slate-100">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  3. Payment Mode Selection
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {[
+                    {
+                      id: 'full',
+                      title: 'Pay Full Online',
+                      desc: `₹${fareData.estimatedFare} (100% Online)`,
+                      icon: CreditCard,
+                      badge: 'Instant'
+                    },
+                    {
+                      id: 'advance',
+                      title: 'Pay 20% Advance',
+                      desc: `₹${Math.round((fareData.estimatedFare * 20) / 100)} Online (Rest ₹${fareData.estimatedFare - Math.round((fareData.estimatedFare * 20) / 100)} to driver)`,
+                      icon: ShieldCheck,
+                      badge: 'Popular'
+                    },
+                    {
+                      id: 'driver',
+                      title: 'Pay Driver Later',
+                      desc: `₹${fareData.estimatedFare} cash/UPI on trip completion`,
+                      icon: User,
+                      badge: 'Flexible'
+                    }
+                  ].map((opt) => (
+                    <label
+                      key={opt.id}
+                      onClick={() => setFormData((prev) => ({ ...prev, paymentOption: opt.id }))}
+                      className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                        formData.paymentOption === opt.id
+                          ? 'border-amber-500 bg-amber-500/10 shadow-xs'
+                          : 'border-slate-200 bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <opt.icon className={`w-4 h-4 ${formData.paymentOption === opt.id ? 'text-amber-700' : 'text-slate-400'}`} />
+                        <input
+                          type="radio"
+                          name="paymentOption"
+                          value={opt.id}
+                          checked={formData.paymentOption === opt.id}
+                          onChange={handleChange}
+                          className="text-amber-600 focus:ring-amber-500"
+                        />
+                      </div>
+                      <div>
+                        <span className="text-xs font-extrabold text-slate-900 block">{opt.title}</span>
+                        <span className="text-[11px] text-slate-600 leading-tight block mt-0.5">{opt.desc}</span>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
               {/* Submit Button */}
               <div className="pt-3">
                 <Button
@@ -494,11 +621,11 @@ export default function BookingForm() {
                   variant="primary"
                   size="lg"
                   fullWidth
-                  disabled={isSubmitting || (Object.keys(touched).length > 0 && !Object.keys(errors).length === 0)}
+                  disabled={isSubmitting}
                   icon={Send}
                   iconPosition="right"
                 >
-                  {isSubmitting ? 'Confirming Booking...' : 'Confirm & Request Booking'}
+                  {isSubmitting ? 'Processing Order...' : (formData.paymentOption === 'driver' ? 'Confirm & Request Booking' : `Pay ${formData.paymentOption === 'full' ? `₹${fareData.estimatedFare}` : `₹${Math.round((fareData.estimatedFare * 20) / 100)}`} with Razorpay`)}
                 </Button>
               </div>
             </form>
@@ -523,6 +650,15 @@ export default function BookingForm() {
           durationMins={fareData.durationMins}
         />
       </div>
+
+      {/* Printable Receipt Modal */}
+      {showReceiptModal && currentBookingForReceipt && (
+        <ReceiptModal
+          booking={currentBookingForReceipt}
+          onClose={() => setShowReceiptModal(false)}
+        />
+      )}
     </div>
   );
 }
+

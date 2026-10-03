@@ -67,6 +67,9 @@ router.post('/', bookingRateLimiter, validateBody(createBookingSchema), async (r
 
     const referenceCode = generateReferenceCode();
 
+    const payOption = data.paymentOption || 'driver';
+    const payMode = payOption === 'driver' ? 'pay_to_driver' : 'online';
+
     const bookingPayload = {
       referenceCode,
       customerName: data.name,
@@ -87,6 +90,10 @@ router.post('/', bookingRateLimiter, validateBody(createBookingSchema), async (r
       estimatedFare: fareResult.estimatedFare,
       fareBreakdown: fareResult.breakdown,
       status: 'pending',
+      paymentStatus: 'unpaid',
+      paymentMode: payMode,
+      paymentOption: payOption,
+      amountPaid: 0,
       notes: data.notes || ''
     };
 
@@ -116,7 +123,7 @@ router.post('/', bookingRateLimiter, validateBody(createBookingSchema), async (r
   }
 });
 
-// GET /api/bookings/:reference (Public status check)
+// GET /api/bookings/:reference (Public status check & Receipt details)
 router.get('/:reference', async (req, res, next) => {
   try {
     const { reference } = req.params;
@@ -141,13 +148,28 @@ router.get('/:reference', async (req, res, next) => {
       success: true,
       data: {
         referenceCode: booking.referenceCode,
-        status: booking.status,
+        customerName: booking.customerName,
+        phone: booking.phone,
+        email: booking.email || '',
+        pickupLocation: booking.pickupLocation,
+        dropLocation: booking.dropLocation,
         pickupDateTime: booking.pickupDateTime,
+        tripType: booking.tripType,
         vehicleName: booking.vehicleName,
+        passengers: booking.passengers,
+        distanceKm: booking.distanceKm,
         estimatedFare: booking.estimatedFare,
-        fareBreakdown: booking.fareBreakdown
+        fareBreakdown: booking.fareBreakdown,
+        status: booking.status,
+        paymentStatus: booking.paymentStatus || 'unpaid',
+        paymentMode: booking.paymentMode || 'pay_to_driver',
+        paymentOption: booking.paymentOption || 'driver',
+        amountPaid: booking.amountPaid || 0,
+        razorpayPaymentId: booking.razorpayPaymentId || '',
+        createdAt: booking.createdAt
       }
     });
+
   } catch (error) {
     next(error);
   }

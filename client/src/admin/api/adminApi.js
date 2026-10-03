@@ -48,6 +48,15 @@ export const adminApi = {
     return res.json();
   },
 
+  refundBooking: async (id, data) => {
+    const res = await fetchWithAuth(`/admin/bookings/${id}/refund`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+    return res.json();
+  },
+
+
   exportBookingsUrl: (params = {}) => {
     const token = sessionStorage.getItem(TOKEN_KEY);
     const query = new URLSearchParams({ ...params, token }).toString();

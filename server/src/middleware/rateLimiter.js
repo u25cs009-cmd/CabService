@@ -23,3 +23,16 @@ export const loginRateLimiter = rateLimit({
     message: 'Too many login attempts. Please try again in 15 minutes.'
   }
 });
+
+// Rate limiter for payment endpoints (max 20 requests per 15 min per IP)
+export const paymentRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many payment requests from this IP. Please try again later.'
+  }
+});
+

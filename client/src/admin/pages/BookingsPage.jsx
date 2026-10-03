@@ -38,6 +38,7 @@ export default function BookingsPage() {
   // Filters & Pagination
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [page, setPage] = useState(1);
@@ -49,6 +50,9 @@ export default function BookingsPage() {
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
   const [bookingToCancel, setBookingToCancel] = useState(null);
+  const [refundModalOpen, setRefundModalOpen] = useState(false);
+  const [refundAmount, setRefundAmount] = useState('');
+  const [refundReason, setRefundReason] = useState('Customer cancellation refund');
   const [selectedDriverId, setSelectedDriverId] = useState('');
   const [editingNotes, setEditingNotes] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
@@ -60,6 +64,7 @@ export default function BookingsPage() {
       limit: 15,
       ...(search && { search }),
       ...(statusFilter && { status: statusFilter }),
+      ...(paymentStatusFilter && { paymentStatus: paymentStatusFilter }),
       ...(startDate && { startDate }),
       ...(endDate && { endDate })
     };
@@ -88,7 +93,8 @@ export default function BookingsPage() {
   useEffect(() => {
     fetchBookings();
     fetchDrivers();
-  }, [page, statusFilter, startDate, endDate]);
+  }, [page, statusFilter, paymentStatusFilter, startDate, endDate]);
+
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -192,12 +198,31 @@ export default function BookingsPage() {
                 setPage(1);
               }}
               options={[
-                { value: '', label: 'All Statuses' },
+                { value: '', label: 'All Trip Statuses' },
                 { value: 'pending', label: 'Pending' },
                 { value: 'confirmed', label: 'Confirmed' },
                 { value: 'assigned', label: 'Driver Assigned' },
                 { value: 'completed', label: 'Completed' },
                 { value: 'cancelled', label: 'Cancelled' }
+              ]}
+              placeholder=""
+              icon={Filter}
+            />
+
+            <Select
+              id="payment-status-filter"
+              value={paymentStatusFilter}
+              onChange={(e) => {
+                setPaymentStatusFilter(e.target.value);
+                setPage(1);
+              }}
+              options={[
+                { value: '', label: 'All Payment Statuses' },
+                { value: 'unpaid', label: 'Unpaid' },
+                { value: 'partial', label: 'Partial (Advance)' },
+                { value: 'paid', label: 'Paid Full' },
+                { value: 'failed', label: 'Failed' },
+                { value: 'refunded', label: 'Refunded' }
               ]}
               placeholder=""
               icon={Filter}
@@ -225,7 +250,7 @@ export default function BookingsPage() {
               icon={Calendar}
             />
 
-            <div className="flex gap-2">
+            <div className="flex gap-2 col-span-1 sm:col-span-2 lg:col-span-1">
               <Button type="submit" variant="primary" size="md" fullWidth>
                 Apply
               </Button>
@@ -233,13 +258,23 @@ export default function BookingsPage() {
                 type="button"
                 variant="emerald"
                 size="md"
-                onClick={handleExportCSV}
+                onClick={() => {
+                  const params = {
+                    ...(search && { search }),
+                    ...(statusFilter && { status: statusFilter }),
+                    ...(paymentStatusFilter && { paymentStatus: paymentStatusFilter }),
+                    ...(startDate && { startDate }),
+                    ...(endDate && { endDate })
+                  };
+                  window.open(adminApi.exportBookingsUrl(params), '_blank');
+                }}
                 icon={Download}
                 title="Export CSV"
               >
                 CSV
               </Button>
             </div>
+
           </form>
         </div>
 
@@ -266,8 +301,9 @@ export default function BookingsPage() {
                     <th className="py-3 px-4">Route</th>
                     <th className="py-3 px-4">Date/Time</th>
                     <th className="py-3 px-4">Vehicle</th>
-                    <th className="py-3 px-4">Fare</th>
-                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4">Fare (Paid)</th>
+                    <th className="py-3 px-4">Payment</th>
+                    <th className="py-3 px-4">Trip Status</th>
                     <th className="py-3 px-4 text-center">Actions</th>
                   </tr>
                 </thead>
@@ -282,10 +318,19 @@ export default function BookingsPage() {
                       </td>
                       <td className="py-3.5 px-4 whitespace-nowrap">{new Date(b.pickupDateTime).toLocaleString()}</td>
                       <td className="py-3.5 px-4">{b.vehicleName}</td>
-                      <td className="py-3.5 px-4 font-extrabold text-slate-900">₹{b.estimatedFare}</td>
+                      <td className="py-3.5 px-4">
+                        <span className="font-extrabold text-slate-900">₹{b.estimatedFare}</span>
+                        {b.amountPaid > 0 && (
+                          <span className="block text-[11px] font-bold text-emerald-700">Paid: ₹{b.amountPaid}</span>
+                        )}
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <StatusBadge status={b.paymentStatus || 'unpaid'} />
+                      </td>
                       <td className="py-3.5 px-4">
                         <StatusBadge status={b.status} />
                       </td>
+
                       <td className="py-3.5 px-4 text-center">
                         <div className="flex items-center justify-center gap-1.5">
                           <button
@@ -356,8 +401,14 @@ export default function BookingsPage() {
             <div className="space-y-6">
               {/* Status Header */}
               <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-xl border border-slate-200">
-                <span className="text-xs font-bold text-slate-500 uppercase">Current Status</span>
-                <StatusBadge status={selectedBooking.status} />
+                <div>
+                  <span className="text-xs font-bold text-slate-500 uppercase block">Ride Status</span>
+                  <StatusBadge status={selectedBooking.status} />
+                </div>
+                <div className="text-right">
+                  <span className="text-xs font-bold text-slate-500 uppercase block">Payment Status</span>
+                  <StatusBadge status={selectedBooking.paymentStatus || 'unpaid'} />
+                </div>
               </div>
 
               {/* Trip Information */}
@@ -370,12 +421,25 @@ export default function BookingsPage() {
                 <div className="flex justify-between"><span className="text-slate-400">Date/Time:</span><span className="font-bold text-slate-900">{new Date(selectedBooking.pickupDateTime).toLocaleString()}</span></div>
                 <div className="flex justify-between"><span className="text-slate-400">Service:</span><span className="font-bold text-slate-900">{selectedBooking.tripType}</span></div>
                 <div className="flex justify-between"><span className="text-slate-400">Vehicle:</span><span className="font-bold text-slate-900">{selectedBooking.vehicleName}</span></div>
-                <div className="flex justify-between"><span className="text-slate-400">Estimated Fare:</span><span className="font-bold text-amber-700 text-sm">₹{selectedBooking.estimatedFare}</span></div>
+              </div>
+
+              {/* Payment Summary Box */}
+              <div className="p-3.5 bg-amber-50/70 border border-amber-200 rounded-xl space-y-1.5 text-xs">
+                <h4 className="font-extrabold text-amber-950 uppercase tracking-wider text-[11px] border-b border-amber-200/80 pb-1 mb-1">
+                  Payment Details
+                </h4>
+                <div className="flex justify-between"><span className="text-slate-600">Total Estimated Fare:</span><span className="font-extrabold text-slate-900">₹{selectedBooking.estimatedFare}</span></div>
+                <div className="flex justify-between"><span className="text-slate-600">Online Amount Paid:</span><span className="font-extrabold text-emerald-700">₹{selectedBooking.amountPaid || 0}</span></div>
+                <div className="flex justify-between"><span className="text-slate-600">Balance Due to Driver:</span><span className="font-extrabold text-rose-700">₹{Math.max(0, selectedBooking.estimatedFare - (selectedBooking.amountPaid || 0))}</span></div>
+                <div className="flex justify-between"><span className="text-slate-600">Payment Mode:</span><span className="font-bold text-slate-800 uppercase">{selectedBooking.paymentMode || 'pay_to_driver'}</span></div>
+                {selectedBooking.razorpayPaymentId && (
+                  <div className="flex justify-between"><span className="text-slate-600">Razorpay Payment ID:</span><span className="font-mono text-slate-900 font-bold">{selectedBooking.razorpayPaymentId}</span></div>
+                )}
               </div>
 
               {/* Actions & Status Change Controls */}
               <div className="border-t border-slate-100 pt-4 space-y-3">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Status Actions</h4>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Status & Payment Actions</h4>
                 <div className="flex flex-wrap gap-2">
                   {selectedBooking.status === 'pending' && (
                     <Button
@@ -397,6 +461,20 @@ export default function BookingsPage() {
                       icon={CheckCircle}
                     >
                       Mark Completed
+                    </Button>
+                  )}
+                  {(selectedBooking.amountPaid || 0) > 0 && selectedBooking.paymentStatus !== 'refunded' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={actionLoading}
+                      onClick={() => {
+                        setRefundAmount(selectedBooking.amountPaid.toString());
+                        setRefundModalOpen(true);
+                      }}
+                      className="border-purple-300 text-purple-800 hover:bg-purple-50 font-bold"
+                    >
+                      Issue Razorpay Refund
                     </Button>
                   )}
                   {['pending', 'confirmed', 'assigned'].includes(selectedBooking.status) && (
@@ -462,6 +540,95 @@ export default function BookingsPage() {
           </Modal>
         )}
 
+        {/* Refund Action Modal */}
+        {refundModalOpen && selectedBooking && (
+          <Modal
+            isOpen={refundModalOpen}
+            onClose={() => setRefundModalOpen(false)}
+            title={`Issue Refund - #${selectedBooking.referenceCode}`}
+          >
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setActionLoading(true);
+                try {
+                  const res = await adminApi.refundBooking(selectedBooking._id, {
+                    amount: refundAmount ? parseFloat(refundAmount) : undefined,
+                    reason: refundReason
+                  });
+                  if (res.success) {
+                    alert(res.message);
+                    setRefundModalOpen(false);
+                    fetchBookings();
+                    if (selectedBooking) {
+                      setSelectedBooking((prev) => ({ ...prev, paymentStatus: res.data.paymentStatus }));
+                    }
+                  } else {
+                    alert(res.message || 'Refund failed');
+                  }
+                } catch (err) {
+                  alert(err.message);
+                } finally {
+                  setActionLoading(false);
+                }
+              }}
+              className="space-y-4"
+            >
+              <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-900">
+                <p><strong>Total Online Amount Paid:</strong> ₹{selectedBooking.amountPaid}</p>
+                <p><strong>Razorpay Payment ID:</strong> {selectedBooking.razorpayPaymentId || 'N/A'}</p>
+              </div>
+
+              <Input
+                id="refund-amount"
+                type="number"
+                step="1"
+                min="1"
+                max={selectedBooking.amountPaid}
+                label="Refund Amount (₹)"
+                value={refundAmount}
+                onChange={(e) => setRefundAmount(e.target.value)}
+                helperText={`Leave as ₹${selectedBooking.amountPaid} for full refund, or specify a partial refund amount.`}
+                required
+              />
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-1">
+                  Reason for Refund
+                </label>
+                <input
+                  type="text"
+                  value={refundReason}
+                  onChange={(e) => setRefundReason(e.target.value)}
+                  placeholder="e.g. Customer requested ride cancellation"
+                  className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                  required
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setRefundModalOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="sm"
+                  disabled={actionLoading}
+                  className="bg-purple-700 hover:bg-purple-800 text-white"
+                >
+                  {actionLoading ? 'Processing Refund...' : 'Process Razorpay Refund'}
+                </Button>
+              </div>
+            </form>
+          </Modal>
+        )}
+
         {/* Cancel Confirmation Dialog */}
         <ConfirmDialog
           isOpen={confirmCancelOpen}
@@ -480,3 +647,4 @@ export default function BookingsPage() {
     </AdminLayout>
   );
 }
+

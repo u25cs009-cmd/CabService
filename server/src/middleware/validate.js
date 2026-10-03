@@ -16,8 +16,30 @@ export const createBookingSchema = z.object({
   vehicleType: z.string().min(1, 'Vehicle type is required'),
   passengers: z.coerce.number().min(1, 'Passengers must be at least 1'),
   distanceKm: z.coerce.number().min(0).optional().default(0),
+  paymentOption: z.enum(['full', 'advance', 'driver']).optional().default('driver'),
   notes: z.string().optional().default('')
 });
+
+// Create Razorpay Order Schema
+export const createPaymentOrderSchema = z.object({
+  referenceCode: z.string().min(1, 'Booking reference code is required'),
+  paymentOption: z.enum(['full', 'advance']).optional().default('full')
+});
+
+// Verify Razorpay Payment Schema
+export const verifyPaymentSchema = z.object({
+  referenceCode: z.string().min(1, 'Booking reference code is required'),
+  razorpay_order_id: z.string().min(1, 'Razorpay order ID is required'),
+  razorpay_payment_id: z.string().min(1, 'Razorpay payment ID is required'),
+  razorpay_signature: z.string().min(1, 'Razorpay signature is required')
+});
+
+// Admin Refund Schema
+export const refundPaymentSchema = z.object({
+  amount: z.coerce.number().positive('Refund amount must be positive').optional(),
+  reason: z.string().optional().default('Admin initiated refund')
+});
+
 
 // Admin Login Schema
 export const loginSchema = z.object({
