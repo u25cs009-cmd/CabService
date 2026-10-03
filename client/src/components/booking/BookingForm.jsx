@@ -1,20 +1,44 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { User, Phone, Mail, MapPin, Calendar, Clock, Car, Users, FileText, Send, CheckCircle, AlertCircle, Compass, Ticket, MessageCircle } from 'lucide-react';
+import {
+  User,
+  Phone,
+  Mail,
+  Calendar,
+  Clock,
+  Car,
+  Users,
+  FileText,
+  Send,
+  CheckCircle,
+  AlertCircle,
+  Compass,
+  Ticket,
+  MessageCircle,
+  Repeat,
+  Package
+} from 'lucide-react';
 import Input from '../common/Input';
 import Select from '../common/Select';
 import Button from '../common/Button';
 import Card from '../common/Card';
 import FareEstimate from './FareEstimate';
+import MapPreview from './MapPreview';
+import LocationAutocomplete from './LocationAutocomplete';
 import { vehiclesData as localVehicles } from '../../data/vehicles';
 import { servicesData } from '../../data/services';
 import { submitBooking, fetchVehicles, openWhatsAppFallback } from '../../services/api';
-import { calculateFare } from '../../utils/fare';
+
+const HOURLY_PACKAGES = [
+  { value: '4hr_40km', label: '4 Hours / 40 KM Package' },
+  { value: '8hr_80km', label: '8 Hours / 80 KM Package' },
+  { value: '12hr_120km', label: '12 Hours / 120 KM Package' }
+];
 
 export default function BookingForm() {
   const [searchParams] = useSearchParams();
   const initialVehicleId = searchParams.get('vehicle') || 'hatchback';
-  const initialServiceId = searchParams.get('service') || servicesData[0].id;
+  const initialServiceId = searchParams.get('service') || 'local';
 
   const [vehicles, setVehicles] = useState(localVehicles);
 
@@ -29,13 +53,24 @@ export default function BookingForm() {
     email: '',
     pickup: '',
     drop: '',
+    pickupCoords: null,
+    dropCoords: null,
     date: getTodayString(),
     time: '10:00',
-    serviceType: initialServiceId,
+    tripType: initialServiceId,
+    packageId: '4hr_40km',
+    isRoundTrip: false,
     vehicleType: initialVehicleId,
     passengers: '1',
     distanceKm: '15',
     notes: ''
+  });
+
+  const [fareData, setFareData] = useState({
+    distanceKm: 15,
+    durationMins: 35,
+    estimatedFare: 400,
+    breakdown: null
   });
 
   const [errors, setErrors] = useState({});
@@ -43,9 +78,7 @@ export default function BookingForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [savedReferenceCode, setSavedReferenceCode] = useState(null);
-  const [isFallbackMode, setIsFallbackMode] = useState(false);
 
-  // Fetch dynamic vehicles on mount
   useEffect(() => {
     fetchVehicles().then((data) => {
       if (data && data.length > 0) {
@@ -54,65 +87,81 @@ export default function BookingForm() {
     });
   }, []);
 
-  // Selected vehicle object
-  const selectedVehicle = vehicles.find((v) => v.id === formData.vehicleType || v.vehicleId === formData.vehicleType || v.type === formData.vehicleType) || vehicles[0] || localVehicles[0];
+  const selectedVehicle =
+    vehicles.find(
+      (v) =>
+        v.id === formData.vehicleType ||
+        v.vehicleId === formData.vehicleType ||
+        v.type === formData.vehicleType
+    ) ||
+    vehicles[0] ||
+    localVehicles[0];
 
-  // Validate form state
+  // Fetch live fare calculation from server API
+  useEffect(() => {
+    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+    const timer = setTimeout(() => {
+      fetch(`${API_BASE_URL}/fare/estimate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pickup: formData.pickup,
+          drop: formData.drop,
+          pickupCoords: formData.pickupCoords,
+          dropCoords: formData.dropCoords,
+          vehicleType: selectedVehicle.type || selectedVehicle.vehicleId || formData.vehicleType,
+          tripType: formData.tripType,
+          dateTime: `${formData.date}T${formData.time}:00`,
+          packageId: formData.packageId,
+          isRoundTrip: formData.isRoundTrip,
+          distanceKm: formData.distanceKm
+        })
+      })
+        .then((res) => res.json())
+        .then((json) => {
+          if (json.success && json.data) {
+            setFareData({
+              distanceKm: json.data.distanceKm,
+              durationMins: json.data.durationMins,
+              estimatedFare: json.data.estimatedFare,
+              breakdown: json.data.breakdown
+            });
+          }
+        })
+        .catch(() => {});
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [
+    formData.pickup,
+    formData.drop,
+    formData.pickupCoords,
+    formData.dropCoords,
+    formData.vehicleType,
+    formData.tripType,
+    formData.date,
+    formData.time,
+    formData.packageId,
+    formData.isRoundTrip,
+    formData.distanceKm,
+    selectedVehicle
+  ]);
+
   const validate = (data = formData) => {
     const errs = {};
 
-    if (!data.name.trim()) {
-      errs.name = 'Full name is required';
-    } else if (data.name.trim().length < 2) {
-      errs.name = 'Name must be at least 2 characters';
-    }
-
+    if (!data.name.trim()) errs.name = 'Full name is required';
     const cleanPhone = data.phone.replace(/\D/g, '');
-    if (!data.phone.trim()) {
-      errs.phone = '10-digit phone number is required';
-    } else if (cleanPhone.length < 10 || cleanPhone.length > 12) {
-      errs.phone = 'Please enter a valid 10-digit mobile number';
-    }
+    if (!data.phone.trim() || cleanPhone.length < 10) errs.phone = 'Valid 10-digit phone number is required';
+    if (!data.pickup.trim()) errs.pickup = 'Pickup location is required';
+    if (!data.drop.trim()) errs.drop = 'Drop location is required';
+    if (!data.date) errs.date = 'Pickup date is required';
+    if (!data.time) errs.time = 'Pickup time is required';
 
-    if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) {
-      errs.email = 'Please enter a valid email address';
-    }
-
-    if (!data.pickup.trim()) {
-      errs.pickup = 'Pickup address/location is required';
-    }
-    if (!data.drop.trim()) {
-      errs.drop = 'Drop-off location is required';
-    }
-
-    if (!data.date) {
-      errs.date = 'Pickup date is required';
-    } else {
-      const selected = new Date(data.date);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      if (selected < today) {
-        errs.date = 'Pickup date cannot be in the past';
-      }
-    }
-
-    if (!data.time) {
-      errs.time = 'Pickup time is required';
-    }
-
-    if (!data.vehicleType) {
-      errs.vehicleType = 'Please select a vehicle type';
-    } else if (selectedVehicle) {
-      const passengerCount = parseInt(data.passengers, 10) || 0;
-      if (passengerCount < 1) {
-        errs.passengers = 'At least 1 passenger is required';
-      } else if (passengerCount > (selectedVehicle.seats || selectedVehicle.passengerCapacity)) {
-        errs.passengers = `Selected vehicle max capacity is ${selectedVehicle.seats || selectedVehicle.passengerCapacity} passengers`;
-      }
-    }
-
-    if (data.distanceKm && (isNaN(data.distanceKm) || parseFloat(data.distanceKm) < 0)) {
-      errs.distanceKm = 'Enter a valid positive distance in KM';
+    const maxSeats = selectedVehicle.seats || selectedVehicle.passengerCapacity || 4;
+    if (parseInt(data.passengers, 10) > maxSeats) {
+      errs.passengers = `Selected vehicle max capacity is ${maxSeats} seats`;
     }
 
     return errs;
@@ -123,13 +172,10 @@ export default function BookingForm() {
   }, [formData, vehicles]);
 
   const handleChange = (e) => {
-    const { id, value } = e.target;
+    const { id, value, type, checked } = e.target;
     const fieldName = id || e.target.name;
-    setFormData((prev) => ({ ...prev, [fieldName]: value }));
-  };
-
-  const handleBlur = (field) => {
-    setTouched((prev) => ({ ...prev, [field]: true }));
+    const val = type === 'checkbox' ? checked : value;
+    setFormData((prev) => ({ ...prev, [fieldName]: val }));
   };
 
   const handleSubmit = async (e) => {
@@ -149,13 +195,12 @@ export default function BookingForm() {
 
     setIsSubmitting(true);
 
-    const fareInfo = calculateFare(formData.distanceKm, selectedVehicle);
-
     const bookingPayload = {
       ...formData,
       vehicleType: selectedVehicle.vehicleId || selectedVehicle.type || selectedVehicle.name,
-      serviceType: servicesData.find((s) => s.id === formData.serviceType)?.name || formData.serviceType,
-      estimatedFare: fareInfo.estimatedFare
+      serviceType: servicesData.find((s) => s.id === formData.tripType)?.name || formData.tripType,
+      estimatedFare: fareData.estimatedFare,
+      fareBreakdown: fareData.breakdown
     };
 
     const result = await submitBooking(bookingPayload);
@@ -164,11 +209,8 @@ export default function BookingForm() {
     if (result.success) {
       setSubmitSuccess(true);
       setSavedReferenceCode(result.referenceCode);
-      setIsFallbackMode(!!result.isFallback);
     }
   };
-
-  const isFormValid = Object.keys(errors).length === 0;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -181,7 +223,7 @@ export default function BookingForm() {
             </div>
             <div>
               <h3 className="text-xl font-bold text-slate-900">Cab Ride Reservation</h3>
-              <p className="text-xs text-slate-500 font-medium">Fill in your trip details for instant server booking & notification.</p>
+              <p className="text-xs text-slate-500 font-medium">Maps Places Autocomplete & Server Calculated Fare</p>
             </div>
           </div>
 
@@ -193,36 +235,22 @@ export default function BookingForm() {
 
               <div className="space-y-1">
                 <h4 className="text-xl font-bold text-emerald-950">Booking Request Confirmed!</h4>
-                {savedReferenceCode ? (
+                {savedReferenceCode && (
                   <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-900 font-extrabold text-base my-2">
                     <Ticket className="w-5 h-5 text-amber-700" />
                     <span>Booking Reference Code: #{savedReferenceCode}</span>
                   </div>
-                ) : (
-                  <p className="text-xs font-semibold text-amber-800 bg-amber-100 p-2 rounded-lg inline-block">
-                    Sent via WhatsApp Fallback Flow
-                  </p>
                 )}
               </div>
 
               <p className="text-xs sm:text-sm text-emerald-800 leading-relaxed font-medium">
-                {savedReferenceCode
-                  ? 'Your booking has been saved in our system and dispatched to our dispatch desk. You can check status anytime using your reference code.'
-                  : 'Your booking request details have been prepared for instant WhatsApp dispatch.'}
+                Your booking request has been saved and dispatched to our 24/7 dispatch desk.
               </p>
 
               <div className="pt-3 flex flex-col sm:flex-row items-center justify-center gap-3">
                 <Button
                   variant="emerald"
-                  onClick={() => {
-                    const fareInfo = calculateFare(formData.distanceKm, selectedVehicle);
-                    openWhatsAppFallback({
-                      ...formData,
-                      vehicleType: selectedVehicle.name,
-                      serviceType: servicesData.find((s) => s.id === formData.serviceType)?.name || formData.serviceType,
-                      estimatedFare: fareInfo.estimatedFare
-                    }, savedReferenceCode);
-                  }}
+                  onClick={() => openWhatsAppFallback(formData, savedReferenceCode)}
                   icon={MessageCircle}
                 >
                   Send Details on WhatsApp
@@ -233,7 +261,6 @@ export default function BookingForm() {
                   onClick={() => {
                     setSubmitSuccess(false);
                     setSavedReferenceCode(null);
-                    setIsFallbackMode(false);
                     setFormData((prev) => ({ ...prev, pickup: '', drop: '', notes: '' }));
                     setTouched({});
                   }}
@@ -244,8 +271,36 @@ export default function BookingForm() {
             </div>
           ) : (
             <form onSubmit={handleSubmit} noValidate className="space-y-5">
+              {/* Trip Type Tabs */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Select Trip Service Category
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-1.5 bg-slate-100 rounded-xl border border-slate-200">
+                  {[
+                    { id: 'local', label: 'Local City' },
+                    { id: 'outstation', label: 'Outstation' },
+                    { id: 'airport', label: 'Airport' },
+                    { id: 'hourly', label: 'Hourly Rental' }
+                  ].map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setFormData((prev) => ({ ...prev, tripType: t.id }))}
+                      className={`py-2 px-2 text-xs font-bold rounded-lg transition-all ${
+                        formData.tripType === t.id
+                          ? 'bg-amber-500 text-slate-950 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Personal Details */}
-              <div className="space-y-4">
+              <div className="space-y-4 pt-2">
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-1">
                   1. Contact Information
                 </h4>
@@ -256,7 +311,6 @@ export default function BookingForm() {
                     placeholder="e.g. Rahul Sharma"
                     value={formData.name}
                     onChange={handleChange}
-                    onBlur={() => handleBlur('name')}
                     error={touched.name && errors.name}
                     required
                     icon={User}
@@ -269,9 +323,7 @@ export default function BookingForm() {
                     placeholder="10-digit mobile number"
                     value={formData.phone}
                     onChange={handleChange}
-                    onBlur={() => handleBlur('phone')}
                     error={touched.phone && errors.phone}
-                    helperText="10-digit mobile number"
                     required
                     icon={Phone}
                   />
@@ -284,8 +336,6 @@ export default function BookingForm() {
                   placeholder="name@example.com"
                   value={formData.email}
                   onChange={handleChange}
-                  onBlur={() => handleBlur('email')}
-                  error={touched.email && errors.email}
                   icon={Mail}
                 />
               </div>
@@ -293,27 +343,82 @@ export default function BookingForm() {
               {/* Ride Details */}
               <div className="space-y-4 pt-2">
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-1">
-                  2. Trip Details
+                  2. Trip & Location Details
                 </h4>
 
+                {/* Autocomplete Pickup & Drop */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Select
-                    id="serviceType"
-                    label="Service Type"
-                    value={formData.serviceType}
+                  <LocationAutocomplete
+                    id="pickup"
+                    label="Pickup Location"
+                    placeholder="Search pickup address or airport"
+                    value={formData.pickup}
                     onChange={handleChange}
-                    onBlur={() => handleBlur('serviceType')}
-                    options={servicesData.map((s) => ({ value: s.id, label: `${s.name} (${s.tagline})` }))}
+                    onSelectPlace={(place) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        pickup: place.address,
+                        pickupCoords: { lat: place.lat, lng: place.lng }
+                      }))
+                    }
+                    error={touched.pickup && errors.pickup}
                     required
-                    icon={Compass}
                   />
 
+                  <LocationAutocomplete
+                    id="drop"
+                    label="Drop-off Destination"
+                    placeholder="Search drop location"
+                    value={formData.drop}
+                    onChange={handleChange}
+                    onSelectPlace={(place) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        drop: place.address,
+                        dropCoords: { lat: place.lat, lng: place.lng }
+                      }))
+                    }
+                    error={touched.drop && errors.drop}
+                    required
+                  />
+                </div>
+
+                {/* Outstation Round-Trip Toggle */}
+                {formData.tripType === 'outstation' && (
+                  <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-xl border border-amber-200">
+                    <input
+                      id="isRoundTrip"
+                      type="checkbox"
+                      checked={formData.isRoundTrip}
+                      onChange={handleChange}
+                      className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500"
+                    />
+                    <label htmlFor="isRoundTrip" className="text-xs font-bold text-amber-950 flex items-center gap-1.5 cursor-pointer">
+                      <Repeat className="w-4 h-4 text-amber-700" />
+                      <span>Round Trip (Discount applied for return journeys)</span>
+                    </label>
+                  </div>
+                )}
+
+                {/* Hourly Package Selector */}
+                {formData.tripType === 'hourly' && (
+                  <Select
+                    id="packageId"
+                    label="Hourly Rental Package"
+                    value={formData.packageId}
+                    onChange={handleChange}
+                    options={HOURLY_PACKAGES}
+                    required
+                    icon={Package}
+                  />
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Select
                     id="vehicleType"
                     label="Vehicle Type"
                     value={formData.vehicleType}
                     onChange={handleChange}
-                    onBlur={() => handleBlur('vehicleType')}
                     options={vehicles.map((v) => ({
                       value: v.vehicleId || v.id || v.type,
                       label: `${v.name} (${v.seats} Seats • ₹${v.ratePerKm}/km)`
@@ -321,31 +426,18 @@ export default function BookingForm() {
                     required
                     icon={Car}
                   />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input
-                    id="pickup"
-                    label="Pickup Location"
-                    placeholder="Area, Street address or Airport"
-                    value={formData.pickup}
-                    onChange={handleChange}
-                    onBlur={() => handleBlur('pickup')}
-                    error={touched.pickup && errors.pickup}
-                    required
-                    icon={MapPin}
-                  />
 
                   <Input
-                    id="drop"
-                    label="Drop-off Destination"
-                    placeholder="Drop address or destination city"
-                    value={formData.drop}
+                    id="passengers"
+                    type="number"
+                    min="1"
+                    max={selectedVehicle.seats || 12}
+                    label={`Passengers (Max ${selectedVehicle.seats || 12})`}
+                    value={formData.passengers}
                     onChange={handleChange}
-                    onBlur={() => handleBlur('drop')}
-                    error={touched.drop && errors.drop}
+                    error={touched.passengers && errors.passengers}
                     required
-                    icon={MapPin}
+                    icon={Users}
                   />
                 </div>
 
@@ -357,7 +449,6 @@ export default function BookingForm() {
                     min={getTodayString()}
                     value={formData.date}
                     onChange={handleChange}
-                    onBlur={() => handleBlur('date')}
                     error={touched.date && errors.date}
                     required
                     icon={Calendar}
@@ -369,57 +460,32 @@ export default function BookingForm() {
                     label="Pickup Time"
                     value={formData.time}
                     onChange={handleChange}
-                    onBlur={() => handleBlur('time')}
                     error={touched.time && errors.time}
                     required
                     icon={Clock}
                   />
 
                   <Input
-                    id="passengers"
+                    id="distanceKm"
                     type="number"
                     min="1"
-                    max={selectedVehicle.seats || 12}
-                    label={`Passengers (Max ${selectedVehicle.seats || 12})`}
-                    value={formData.passengers}
+                    label="Distance (KM)"
+                    placeholder="e.g. 25"
+                    value={formData.distanceKm}
                     onChange={handleChange}
-                    onBlur={() => handleBlur('passengers')}
-                    error={touched.passengers && errors.passengers}
-                    required
-                    icon={Users}
+                    helperText="Auto-computed or manual"
                   />
                 </div>
 
                 <Input
-                  id="distanceKm"
-                  type="number"
-                  min="1"
-                  label="Approximate Trip Distance (in KM)"
-                  placeholder="e.g. 25"
-                  value={formData.distanceKm}
-                  onChange={handleChange}
-                  onBlur={() => handleBlur('distanceKm')}
-                  error={touched.distanceKm && errors.distanceKm}
-                  helperText="Used to compute instant fare estimate on the right sidebar"
-                />
-
-                <Input
                   id="notes"
-                  label="Special Instructions / Notes (Optional)"
-                  placeholder="e.g. Flight number, extra luggage space needed, child seat"
+                  label="Special Notes (Optional)"
+                  placeholder="e.g. Flight number, extra luggage space"
                   value={formData.notes}
                   onChange={handleChange}
                   icon={FileText}
                 />
               </div>
-
-              {/* Submit Error Summary */}
-              {Object.keys(touched).length > 0 && !isFormValid && (
-                <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-center gap-2 font-medium">
-                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                  <span>Please correct highlighted fields before submitting your booking.</span>
-                </div>
-              )}
 
               {/* Submit Button */}
               <div className="pt-3">
@@ -428,48 +494,34 @@ export default function BookingForm() {
                   variant="primary"
                   size="lg"
                   fullWidth
-                  disabled={isSubmitting || (Object.keys(touched).length > 0 && !isFormValid)}
+                  disabled={isSubmitting || (Object.keys(touched).length > 0 && !Object.keys(errors).length === 0)}
                   icon={Send}
                   iconPosition="right"
                 >
-                  {isSubmitting ? 'Saving Booking Request...' : 'Confirm & Request Booking'}
+                  {isSubmitting ? 'Confirming Booking...' : 'Confirm & Request Booking'}
                 </Button>
-                <p className="text-[11px] text-center text-slate-500 mt-2 font-medium">
-                  🔒 No advance payment required for initial request. Server calculated fare.
-                </p>
               </div>
             </form>
           )}
         </Card>
       </div>
 
-      {/* Live Fare Estimator Sidebar Column */}
+      {/* Live Fare & Map Preview Sidebar Column */}
       <div className="lg:col-span-5 space-y-6">
-        <FareEstimate distanceKm={formData.distanceKm} vehicle={selectedVehicle} />
+        <FareEstimate
+          distanceKm={fareData.distanceKm}
+          durationMins={fareData.durationMins}
+          vehicle={selectedVehicle}
+          breakdown={fareData.breakdown}
+          tripType={formData.tripType}
+        />
 
-        {/* Selected Vehicle Quick Card */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-xs space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Selected Vehicle Info</span>
-            <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
-              AC Available
-            </span>
-          </div>
-
-          <h4 className="text-lg font-bold text-slate-900">{selectedVehicle.name}</h4>
-          <p className="text-xs text-slate-500 font-medium">{selectedVehicle.models}</p>
-
-          <div className="grid grid-cols-2 gap-3 pt-2 text-xs text-slate-700 font-medium">
-            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-              <span className="text-slate-400 block text-[10px] uppercase">Passenger Seats</span>
-              <span className="font-bold text-slate-900 text-sm">Up to {selectedVehicle.seats} Persons</span>
-            </div>
-            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-              <span className="text-slate-400 block text-[10px] uppercase">Luggage Capacity</span>
-              <span className="font-bold text-slate-900 text-sm">{selectedVehicle.luggageCapacity || selectedVehicle.luggage} Medium Bags</span>
-            </div>
-          </div>
-        </div>
+        <MapPreview
+          pickup={formData.pickup}
+          drop={formData.drop}
+          distanceKm={fareData.distanceKm}
+          durationMins={fareData.durationMins}
+        />
       </div>
     </div>
   );

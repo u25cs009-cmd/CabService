@@ -1,53 +1,76 @@
 import express from 'express';
-import mongoose from 'mongoose';
+import rateLimit from 'express-rate-limit';
 import Vehicle from '../models/Vehicle.js';
-import { calculateServerFare } from '../services/fareService.js';
+import { getRouteDetails } from '../services/mapsService.js';
+import { calculateAdvancedFare } from '../services/fareService.js';
 
 const router = express.Router();
 
-const defaultVehicles = [
-  { vehicleId: 'hatchback', name: 'Compact Hatchback', type: 'hatchback', ratePerKm: 12, baseFare: 300, seats: 4 },
-  { vehicleId: 'sedan', name: 'Comfort Sedan', type: 'sedan', ratePerKm: 14, baseFare: 400, seats: 4 },
-  { vehicleId: 'suv', name: 'Premium SUV / MUV', type: 'suv', ratePerKm: 18, baseFare: 600, seats: 6 },
-  { vehicleId: 'tempo', name: 'Executive Tempo Traveller', type: 'tempo', ratePerKm: 25, baseFare: 1500, seats: 12 }
-];
+// Strict rate limiter for POST /api/fare/estimate to prevent API quota drain & abuse
+const estimateRateLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 30, // 30 requests per 10 mins per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many fare estimation requests. Please try again in a few minutes.'
+  }
+});
 
-// POST /api/fare/estimate
-router.post('/estimate', async (req, res, next) => {
+// POST /api/fare/estimate (Public - Maps & Advanced Fare Calculation)
+router.post('/estimate', estimateRateLimiter, async (req, res, next) => {
   try {
-    const { distanceKm, vehicleId, vehicleType } = req.body;
-    const isDbConnected = mongoose.connection.readyState === 1;
+    const {
+      pickup,
+      drop,
+      pickupCoords,
+      dropCoords,
+      vehicleId,
+      vehicleType = 'sedan',
+      tripType = 'local',
+      dateTime = new Date(),
+      packageId = '',
+      isRoundTrip = false,
+      extraHours = 0
+    } = req.body;
 
-    let vehicle = null;
-    if (isDbConnected) {
-      if (vehicleId) {
-        vehicle = await Vehicle.findById(vehicleId);
+    let distanceKm = parseFloat(req.body.distanceKm) || 0;
+    let durationMins = 0;
+    let routeSource = 'manual';
+
+    // Call Maps service if pickup and drop locations are provided
+    if (pickup && drop) {
+      const route = await getRouteDetails(pickup, drop, pickupCoords, dropCoords);
+      if (distanceKm <= 0) {
+        distanceKm = route.distanceKm;
       }
-      if (!vehicle && vehicleType) {
-        vehicle = await Vehicle.findOne({
-          $or: [{ vehicleId: vehicleType }, { type: vehicleType }],
-          isActive: true
-        });
-      }
+      durationMins = route.durationMins;
+      routeSource = route.source;
     }
 
-    if (!vehicle) {
-      vehicle = defaultVehicles.find(
-        (v) => v.vehicleId === vehicleType || v.type === vehicleType
-      ) || defaultVehicles[0];
-    }
-
-    const fareInfo = calculateServerFare(distanceKm, vehicle);
+    const fareResult = await calculateAdvancedFare({
+      vehicleType,
+      distanceKm,
+      tripType,
+      dateTime,
+      packageId,
+      isRoundTrip,
+      extraHours
+    });
 
     res.json({
       success: true,
       data: {
-        vehicle: {
-          id: vehicle._id || vehicle.vehicleId,
-          name: vehicle.name,
-          type: vehicle.type || vehicle.vehicleId
-        },
-        ...fareInfo
+        pickup,
+        drop,
+        distanceKm: fareResult.distanceKm,
+        durationMins,
+        routeSource,
+        vehicleType: fareResult.vehicleType,
+        tripType: fareResult.tripType,
+        estimatedFare: fareResult.estimatedFare,
+        breakdown: fareResult.breakdown
       }
     });
   } catch (error) {

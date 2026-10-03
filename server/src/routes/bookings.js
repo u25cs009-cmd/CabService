@@ -5,17 +5,11 @@ import Booking from '../models/Booking.js';
 import Vehicle from '../models/Vehicle.js';
 import { validateBody, createBookingSchema } from '../middleware/validate.js';
 import { bookingRateLimiter } from '../middleware/rateLimiter.js';
-import { calculateServerFare } from '../services/fareService.js';
+import { getRouteDetails } from '../services/mapsService.js';
+import { calculateAdvancedFare } from '../services/fareService.js';
 import { sendOwnerBookingNotification } from '../services/emailService.js';
 
 const router = express.Router();
-
-const defaultVehicles = [
-  { vehicleId: 'hatchback', name: 'Compact Hatchback', type: 'hatchback', ratePerKm: 12, baseFare: 300, seats: 4 },
-  { vehicleId: 'sedan', name: 'Comfort Sedan', type: 'sedan', ratePerKm: 14, baseFare: 400, seats: 4 },
-  { vehicleId: 'suv', name: 'Premium SUV / MUV', type: 'suv', ratePerKm: 18, baseFare: 600, seats: 6 },
-  { vehicleId: 'tempo', name: 'Executive Tempo Traveller', type: 'tempo', ratePerKm: 25, baseFare: 1500, seats: 12 }
-];
 
 function generateReferenceCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -26,7 +20,6 @@ function generateReferenceCode() {
   return result;
 }
 
-// Memory cache for fallback bookings when DB is offline
 const inMemoryBookings = new Map();
 
 // POST /api/bookings (Public - Create Cab Booking)
@@ -46,25 +39,33 @@ router.post('/', bookingRateLimiter, validateBody(createBookingSchema), async (r
       });
     }
 
-    if (!vehicleDoc) {
-      vehicleDoc = defaultVehicles.find(
-        (v) => v.vehicleId === data.vehicleType || v.type === data.vehicleType
-      ) || defaultVehicles[1];
+    const vType = vehicleDoc?.type || vehicleDoc?.vehicleId || data.vehicleType || 'sedan';
+    const vName = vehicleDoc?.name || 'Comfort Sedan';
+
+    // Route calculation via mapsService
+    let distanceKm = parseFloat(data.distanceKm) || 0;
+    let durationMins = 0;
+    if (data.pickup && data.drop) {
+      const route = await getRouteDetails(data.pickup, data.drop, req.body.pickupCoords, req.body.dropCoords);
+      if (distanceKm <= 0) {
+        distanceKm = route.distanceKm;
+      }
+      durationMins = route.durationMins;
     }
 
-    // Capacity validation check
-    const maxSeats = vehicleDoc.seats || vehicleDoc.passengerCapacity || 4;
-    if (data.passengers > maxSeats) {
-      return res.status(400).json({
-        success: false,
-        message: `Selected vehicle capacity is maximum ${maxSeats} passengers`
-      });
-    }
-
-    // Authoritative server-side fare calculation
-    const fareInfo = calculateServerFare(data.distanceKm, vehicleDoc);
-    const referenceCode = generateReferenceCode();
+    // Authoritative Server-side Advanced Fare Calculation
     const pickupDateObj = new Date(`${data.date}T${data.time}:00`);
+    const fareResult = await calculateAdvancedFare({
+      vehicleType: vType,
+      distanceKm,
+      tripType: data.tripType || 'local',
+      dateTime: isNaN(pickupDateObj.getTime()) ? new Date() : pickupDateObj,
+      packageId: req.body.packageId || '',
+      isRoundTrip: req.body.isRoundTrip || false,
+      extraHours: req.body.extraHours || 0
+    });
+
+    const referenceCode = generateReferenceCode();
 
     const bookingPayload = {
       referenceCode,
@@ -73,12 +74,18 @@ router.post('/', bookingRateLimiter, validateBody(createBookingSchema), async (r
       email: data.email || '',
       pickupLocation: data.pickup,
       dropLocation: data.drop,
+      pickupCoords: req.body.pickupCoords || null,
+      dropCoords: req.body.dropCoords || null,
       pickupDateTime: isNaN(pickupDateObj.getTime()) ? new Date() : pickupDateObj,
       tripType: data.tripType || 'local',
-      vehicleName: vehicleDoc.name,
+      packageId: req.body.packageId || '',
+      isRoundTrip: req.body.isRoundTrip || false,
+      vehicleName: vName,
       passengers: data.passengers,
-      distanceKm: fareInfo.distanceKm,
-      estimatedFare: fareInfo.estimatedFare,
+      distanceKm: fareResult.distanceKm,
+      durationMins,
+      estimatedFare: fareResult.estimatedFare,
+      fareBreakdown: fareResult.breakdown,
       status: 'pending',
       notes: data.notes || ''
     };
@@ -86,14 +93,14 @@ router.post('/', bookingRateLimiter, validateBody(createBookingSchema), async (r
     if (isDbConnected) {
       const booking = new Booking({
         ...bookingPayload,
-        vehicle: vehicleDoc._id || null
+        vehicle: vehicleDoc?._id || null
       });
       await booking.save();
     } else {
       inMemoryBookings.set(referenceCode, bookingPayload);
     }
 
-    // Dispatch owner email notification asynchronously
+    // Send owner notification email
     sendOwnerBookingNotification(bookingPayload).catch((err) => {
       console.error(`Background email task failed: ${err.message}`);
     });
@@ -109,7 +116,7 @@ router.post('/', bookingRateLimiter, validateBody(createBookingSchema), async (r
   }
 });
 
-// GET /api/bookings/:reference (Public status check by reference code)
+// GET /api/bookings/:reference (Public status check)
 router.get('/:reference', async (req, res, next) => {
   try {
     const { reference } = req.params;
@@ -137,7 +144,8 @@ router.get('/:reference', async (req, res, next) => {
         status: booking.status,
         pickupDateTime: booking.pickupDateTime,
         vehicleName: booking.vehicleName,
-        estimatedFare: booking.estimatedFare
+        estimatedFare: booking.estimatedFare,
+        fareBreakdown: booking.fareBreakdown
       }
     });
   } catch (error) {
