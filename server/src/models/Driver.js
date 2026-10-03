@@ -74,5 +74,8 @@ const driverSchema = new mongoose.Schema(
 );
 
 driverSchema.index({ location: '2dsphere' });
+driverSchema.index({ isOnline: 1, status: 1 });
+driverSchema.index({ user: 1 });
+driverSchema.index({ phone: 1 });
 
 export default mongoose.models.Driver || mongoose.model('Driver', driverSchema);

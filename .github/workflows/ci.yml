@@ -1,0 +1,44 @@
+name: CI Build & Sanity Verification
+
+on:
+  push:
+    branches: [ main, master, yashi, "*"]
+  pull_request:
+    branches: [ main, master, yashi ]
+
+jobs:
+  build-and-test:
+    name: Build & Verify Production Readiness
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          cache-dependency-path: |
+            client/package-lock.json
+            server/package-lock.json
+
+      - name: Install Frontend Dependencies & Build
+        run: |
+          cd client
+          npm ci
+          npm run build
+        env:
+          VITE_API_URL: "https://api.pipippipcabs.com/api"
+
+      - name: Install Backend Dependencies & Validate Syntax
+        run: |
+          cd server
+          npm ci
+          node --check src/server.js
+          node --check src/app.js

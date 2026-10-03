@@ -237,4 +237,9 @@ const bookingSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+bookingSchema.index({ pickupDateTime: -1 });
+bookingSchema.index({ driver: 1, status: 1 });
+bookingSchema.index({ company: 1, createdAt: -1 });
+bookingSchema.index({ createdAt: -1 });
+
 export default mongoose.models.Booking || mongoose.model('Booking', bookingSchema);

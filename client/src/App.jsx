@@ -37,6 +37,7 @@ import AnalyticsAdminPage from './admin/pages/AnalyticsAdminPage';
 
 import CustomerTrackingPage from './pages/CustomerTrackingPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
+import TermsPage from './pages/TermsPage';
 import LiveMapAdminPage from './admin/pages/LiveMapAdminPage';
 
 import { DriverAuthProvider } from './driver/DriverAuthContext';
@@ -68,6 +69,7 @@ export default function App() {
                 <Route path="/review/:referenceCode" element={<ReviewPage />} />
                 <Route path="/track/:trackingToken" element={<CustomerTrackingPage />} />
                 <Route path="/privacy" element={<PrivacyPolicyPage />} />
+                <Route path="/terms" element={<TermsPage />} />
                 <Route path="/about" element={<AboutPage />} />
                 <Route path="/contact" element={<ContactPage />} />
 

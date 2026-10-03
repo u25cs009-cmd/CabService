@@ -1,6 +1,9 @@
 User-agent: *
 Allow: /
 Disallow: /admin/
+Disallow: /driver/
+Disallow: /track/
+Disallow: /customer/
 Disallow: /api/
 
 Sitemap: https://pipippipcabs.com/sitemap.xml

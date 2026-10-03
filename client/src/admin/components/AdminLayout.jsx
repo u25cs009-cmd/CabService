@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { siteConfig } from '../../config/site';
+import { Helmet } from 'react-helmet-async';
 
 export default function AdminLayout({ children, title }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -55,6 +56,10 @@ export default function AdminLayout({ children, title }) {
 
   return (
     <div className="min-h-screen flex bg-slate-100 text-slate-900 font-sans">
+      <Helmet>
+        <title>{`${title || 'Admin Panel'} | ${siteConfig.name}`}</title>
+        <meta name="robots" content="noindex, nofollow" />
+      </Helmet>
       {/* Sidebar for Desktop */}
       <aside className="hidden lg:flex flex-col w-64 bg-slate-900 text-slate-300 border-r border-slate-800 shrink-0">
         <div className="p-5 border-b border-slate-800 flex items-center gap-3">

@@ -76,42 +76,64 @@ const sampleDrivers = [
 ];
 
 async function seedDatabase() {
-  console.log('[Seed] Starting database seeding process...');
+  console.log('[Seed] Starting production-safe database initialization...');
   const conn = await connectDB();
 
   if (!conn) {
-    console.error('[Seed] MongoDB connection failed. Make sure MongoDB service is active.');
+    console.error('[Seed] MongoDB connection failed. Exiting.');
     process.exit(1);
   }
 
   try {
-    // 1. Seed Vehicles
-    await Vehicle.deleteMany({});
-    const insertedVehicles = await Vehicle.insertMany(initialVehicles);
-    console.log(`[Seed] Successfully seeded ${insertedVehicles.length} vehicles.`);
+    // 1. Seed Vehicles without deleting existing custom vehicles
+    let vehiclesAdded = 0;
+    for (const v of initialVehicles) {
+      const res = await Vehicle.updateOne(
+        { vehicleId: v.vehicleId },
+        { $setOnInsert: v },
+        { upsert: true }
+      );
+      if (res.upsertedCount > 0) vehiclesAdded++;
+    }
+    console.log(`[Seed] Vehicles: ${vehiclesAdded} initial vehicle(s) inserted. Existing vehicles preserved.`);
 
-    // 2. Seed Admin User
-    await User.deleteMany({ role: 'admin' });
-    const adminEmail = process.env.ADMIN_EMAIL || 'admin@pipippip.com';
-    const adminPassword = process.env.ADMIN_PASSWORD || 'AdminSecurePassword123!';
+    // 2. Safe Admin Creation (reads ONLY from env, never prints password, never overwrites existing admin)
+    const adminEmail = process.env.ADMIN_EMAIL?.trim();
+    const adminPassword = process.env.ADMIN_PASSWORD?.trim();
 
-    const salt = await bcrypt.genSalt(10);
-    const passwordHash = await bcrypt.hash(adminPassword, salt);
+    const existingAdmin = await User.findOne({ role: 'admin' });
+    if (existingAdmin) {
+      console.log(`[Seed] Admin user already exists (${existingAdmin.email}). Skipping admin creation.`);
+    } else {
+      if (!adminEmail || !adminPassword) {
+        console.warn('[Seed] ADMIN_EMAIL or ADMIN_PASSWORD env vars not set. Skipping initial admin creation.');
+      } else {
+        const salt = await bcrypt.genSalt(10);
+        const passwordHash = await bcrypt.hash(adminPassword, salt);
 
-    const adminUser = await User.create({
-      name: 'System Admin',
-      email: adminEmail.toLowerCase(),
-      passwordHash,
-      role: 'admin'
-    });
-    console.log(`[Seed] Created admin account: ${adminUser.email}`);
+        const newAdmin = await User.create({
+          name: 'System Admin',
+          email: adminEmail.toLowerCase(),
+          passwordHash,
+          role: 'admin'
+        });
+        console.log(`[Seed] Successfully created initial admin account: ${newAdmin.email}`);
+      }
+    }
 
-    // 3. Seed Sample Drivers
-    await Driver.deleteMany({});
-    const insertedDrivers = await Driver.insertMany(sampleDrivers);
-    console.log(`[Seed] Created ${insertedDrivers.length} sample drivers.`);
+    // 3. Seed Sample Drivers without overwriting existing driver records
+    let driversAdded = 0;
+    for (const d of sampleDrivers) {
+      const res = await Driver.updateOne(
+        { licenseNo: d.licenseNo },
+        { $setOnInsert: d },
+        { upsert: true }
+      );
+      if (res.upsertedCount > 0) driversAdded++;
+    }
+    console.log(`[Seed] Drivers: ${driversAdded} sample driver(s) inserted. Existing drivers preserved.`);
 
-    console.log('[Seed] Seeding completed successfully!');
+    console.log('[Seed] Database initialization finished safely.');
     process.exit(0);
   } catch (error) {
     console.error('[Seed] Error during seeding:', error.message);
