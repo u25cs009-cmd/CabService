@@ -141,10 +141,30 @@ export const processExpiredOffers = async () => {
   }
 };
 
-// Start background offer check interval (every 5 seconds)
+/**
+ * Purges route trails older than retentionDays (default 30 days) for privacy compliance
+ */
+export const purgeOldRouteTrails = async (retentionDays = 30) => {
+  try {
+    const cutoffDate = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+    await Booking.updateMany(
+      { updatedAt: { $lt: cutoffDate }, 'routeTrail.0': { $exists: true } },
+      { $set: { routeTrail: [] } }
+    );
+  } catch (error) {
+    console.error('Error purging old route trails:', error);
+  }
+};
+
+// Start background offer check interval (every 5 seconds) and retention purge (every 6 hours)
 let intervalId = null;
+let retentionIntervalId = null;
 export const startDispatchCron = () => {
   if (!intervalId) {
     intervalId = setInterval(processExpiredOffers, 5000);
+  }
+  if (!retentionIntervalId) {
+    purgeOldRouteTrails();
+    retentionIntervalId = setInterval(() => purgeOldRouteTrails(30), 6 * 60 * 60 * 1000);
   }
 };

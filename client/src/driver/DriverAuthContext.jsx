@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { connectSocket, disconnectSocket, getSocket } from '../services/socketService';
 
 const DriverAuthContext = createContext(null);
 
@@ -43,12 +44,29 @@ export const DriverAuthProvider = ({ children }) => {
     }
   }, [driverToken, fetchDriverProfile]);
 
-  // Periodic Location Updates when online
+  // Periodic Socket & REST Location Updates when online
   useEffect(() => {
-    if (!driverToken || !driver?.isOnline) return;
+    if (!driverToken || !driver?.isOnline) {
+      disconnectSocket();
+      return;
+    }
+
+    const socket = connectSocket({ token: driverToken });
 
     const sendLocation = (coords) => {
-      const { longitude, latitude } = coords;
+      const { longitude, latitude, heading = 0, speed = 0 } = coords;
+
+      // 1. Emit via WebSockets
+      if (socket && socket.connected) {
+        socket.emit('driver:location_update', {
+          lng: longitude,
+          lat: latitude,
+          heading,
+          speed
+        });
+      }
+
+      // 2. HTTP fallback sync
       fetch('/api/driver/location', {
         method: 'PUT',
         headers: {
@@ -72,9 +90,11 @@ export const DriverAuthProvider = ({ children }) => {
           () => {},
           { enableHighAccuracy: true }
         );
-      }, 15000); // Send GPS every 15 seconds
+      }, 5000); // Send GPS every 5 seconds
 
-      return () => clearInterval(watchId);
+      return () => {
+        clearInterval(watchId);
+      };
     }
   }, [driverToken, driver?.isOnline]);
 

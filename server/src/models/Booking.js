@@ -190,6 +190,21 @@ const bookingSchema = new mongoose.Schema(
       type: String,
       default: ''
     },
+    trackingToken: {
+      type: String,
+      unique: true,
+      sparse: true,
+      index: true
+    },
+    routeTrail: [
+      {
+        lat: { type: Number, required: true },
+        lng: { type: Number, required: true },
+        heading: { type: Number, default: 0 },
+        speed: { type: Number, default: 0 },
+        timestamp: { type: Date, default: Date.now }
+      }
+    ],
     refunds: [
       {
         refundId: { type: String, default: '' },

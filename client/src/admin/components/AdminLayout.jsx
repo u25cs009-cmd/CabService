@@ -13,7 +13,8 @@ import {
   ChevronRight,
   Calculator,
   Tag,
-  Star
+  Star,
+  MapPin
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { siteConfig } from '../../config/site';
@@ -26,6 +27,7 @@ export default function AdminLayout({ children, title }) {
 
   const navItems = [
     { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
+    { name: 'Live Operations Map', path: '/admin/live-map', icon: MapPin },
     { name: 'Bookings', path: '/admin/bookings', icon: CalendarCheck },
     { name: 'Vehicles Fleet', path: '/admin/vehicles', icon: Car },
     { name: 'Driver Roster', path: '/admin/drivers', icon: Users },

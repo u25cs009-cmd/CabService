@@ -79,9 +79,9 @@ export async function sendCustomerBookingUpdate(booking, driver = null) {
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: { user: emailUser, pass: emailPass }
-    });
-
-    const statusTitle = booking.status.toUpperCase();
+        const statusTitle = booking.status.toUpperCase();
+    const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+    const trackingUrl = booking.trackingToken ? `${clientUrl}/track/${booking.trackingToken}` : `${clientUrl}/booking/receipt/${booking.referenceCode}`;
     let driverInfoHtml = '';
 
     if (driver) {
@@ -111,7 +111,13 @@ export async function sendCustomerBookingUpdate(booking, driver = null) {
             
             ${driverInfoHtml}
 
-            <div style="margin-top: 20px; padding-top: 12px; border-t: 1px solid #eee;">
+            <div style="margin: 20px 0; text-align: center;">
+              <a href="${trackingUrl}" style="background-color: #10b981; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
+                📍 Track Your Cab Live
+              </a>
+            </div>
+
+            <div style="margin-top: 20px; padding-top: 12px; border-top: 1px solid #eee;">
               <p style="margin: 4px 0;"><strong>Pickup:</strong> ${booking.pickupLocation}</p>
               <p style="margin: 4px 0;"><strong>Drop:</strong> ${booking.dropLocation}</p>
               <p style="margin: 4px 0;"><strong>Date & Time:</strong> ${new Date(booking.pickupDateTime).toLocaleString()}</p>
@@ -120,7 +126,6 @@ export async function sendCustomerBookingUpdate(booking, driver = null) {
             
             <p style="margin-top: 20px;">Need support? Call us 24/7 at <strong>6201901834</strong>.</p>
           </div>
-        </div>
       `
     };
 

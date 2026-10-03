@@ -56,6 +56,18 @@ const driverSchema = new mongoose.Schema(
         type: [Number], // [longitude, latitude]
         default: [77.2090, 28.6139] // Default New Delhi coordinates
       }
+    },
+    heading: {
+      type: Number,
+      default: 0
+    },
+    speed: {
+      type: Number,
+      default: 0
+    },
+    lastLocationUpdate: {
+      type: Date,
+      default: Date.now
     }
   },
   { timestamps: true }

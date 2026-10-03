@@ -92,12 +92,14 @@ router.post('/', bookingRateLimiter, optionalCustomer, validateBody(createBookin
     }
 
     const referenceCode = generateReferenceCode();
+    const trackingToken = `trk_${crypto.randomBytes(16).toString('hex')}`;
 
     const payOption = data.paymentOption || 'driver';
     const payMode = payOption === 'driver' ? 'pay_to_driver' : 'online';
 
     const bookingPayload = {
       referenceCode,
+      trackingToken,
       customerName: data.name,
       phone: data.phone,
       email: data.email || (req.user?.email || ''),
@@ -205,10 +207,100 @@ router.get('/:reference', async (req, res, next) => {
         paymentOption: booking.paymentOption || 'driver',
         amountPaid: booking.amountPaid || 0,
         razorpayPaymentId: booking.razorpayPaymentId || '',
+        trackingToken: booking.trackingToken || '',
         createdAt: booking.createdAt
       }
     });
 
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/bookings/track/:trackingToken (Customer Live Tracking Endpoint)
+router.get('/track/:trackingToken', async (req, res, next) => {
+  try {
+    const { trackingToken } = req.params;
+    const isDbConnected = mongoose.connection.readyState === 1;
+
+    if (!isDbConnected) {
+      return res.status(503).json({ success: false, message: 'Database connection offline.' });
+    }
+
+    const booking = await Booking.findOne({ trackingToken }).populate('driver');
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Invalid or unguessable tracking link.' });
+    }
+
+    // Expiry rule: Link deactivates 1 hour after completion or cancellation
+    if (['completed', 'cancelled'].includes(booking.status)) {
+      const oneHourMs = 60 * 60 * 1000;
+      const finishedTime = new Date(booking.updatedAt).getTime();
+      if (Date.now() - finishedTime > oneHourMs) {
+        return res.status(410).json({
+          success: false,
+          expired: true,
+          message: 'This tracking link has expired as the trip was completed or cancelled over 1 hour ago.'
+        });
+      }
+    }
+
+    // Privacy rule: Only reveal driver phone and live location IF driver has been assigned to the booking
+    let driverData = null;
+    let driverLocation = null;
+
+    if (booking.driver && ['assigned', 'on_the_way', 'arrived', 'in_progress', 'completed'].includes(booking.status)) {
+      driverData = {
+        name: booking.driver.name,
+        phone: booking.driver.phone,
+        vehicleNumber: booking.driver.vehicleNumber,
+        vehicleType: booking.driver.vehicleType || 'Sedan'
+      };
+
+      if (booking.driver.location && Array.isArray(booking.driver.location.coordinates)) {
+        driverLocation = {
+          lng: booking.driver.location.coordinates[0],
+          lat: booking.driver.location.coordinates[1],
+          heading: booking.driver.heading || 0,
+          speed: booking.driver.speed || 0,
+          lastUpdated: booking.driver.lastLocationUpdate
+        };
+      }
+    }
+
+    // Compute estimated ETA (approx 2 mins per km or durationMins)
+    let computedEtaMins = booking.durationMins || Math.ceil((booking.distanceKm || 5) * 2);
+    if (booking.status === 'arrived') {
+      computedEtaMins = 0; // Driver at pickup location
+    } else if (booking.status === 'in_progress') {
+      computedEtaMins = Math.max(1, Math.ceil(booking.durationMins / 2));
+    }
+
+    res.json({
+      success: true,
+      data: {
+        referenceCode: booking.referenceCode,
+        trackingToken: booking.trackingToken,
+        customerName: booking.customerName,
+        pickupLocation: booking.pickupLocation,
+        dropLocation: booking.dropLocation,
+        pickupCoords: booking.pickupCoords,
+        dropCoords: booking.dropCoords,
+        pickupDateTime: booking.pickupDateTime,
+        tripType: booking.tripType,
+        vehicleName: booking.vehicleName,
+        status: booking.status,
+        otpCode: ['assigned', 'on_the_way', 'arrived'].includes(booking.status) ? booking.otpCode : undefined,
+        estimatedFare: booking.estimatedFare,
+        paymentStatus: booking.paymentStatus,
+        paymentMode: booking.paymentMode,
+        driver: driverData,
+        driverLocation,
+        routeTrail: booking.routeTrail || [],
+        etaMins: computedEtaMins,
+        updatedAt: booking.updatedAt
+      }
+    });
   } catch (error) {
     next(error);
   }
