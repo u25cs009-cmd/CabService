@@ -31,6 +31,10 @@ import FareRulesAdminPage from './admin/pages/FareRulesAdminPage';
 import CouponsAdminPage from './admin/pages/CouponsAdminPage';
 import ReviewsAdminPage from './admin/pages/ReviewsAdminPage';
 
+import CustomerTrackingPage from './pages/CustomerTrackingPage';
+import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
+import LiveMapAdminPage from './admin/pages/LiveMapAdminPage';
+
 import { DriverAuthProvider } from './driver/DriverAuthContext';
 import DriverProtectedRoute from './driver/DriverProtectedRoute';
 import DriverLoginPage from './driver/DriverLoginPage';
@@ -58,6 +62,8 @@ export default function App() {
                 <Route path="/reset-password" element={<ResetPasswordPage />} />
                 <Route path="/account" element={<CustomerAccountPage />} />
                 <Route path="/review/:referenceCode" element={<ReviewPage />} />
+                <Route path="/track/:trackingToken" element={<CustomerTrackingPage />} />
+                <Route path="/privacy" element={<PrivacyPolicyPage />} />
                 <Route path="/about" element={<AboutPage />} />
                 <Route path="/contact" element={<ContactPage />} />
 
@@ -95,6 +101,14 @@ export default function App() {
                   element={
                     <ProtectedRoute>
                       <DashboardPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/live-map"
+                  element={
+                    <ProtectedRoute>
+                      <LiveMapAdminPage />
                     </ProtectedRoute>
                   }
                 />

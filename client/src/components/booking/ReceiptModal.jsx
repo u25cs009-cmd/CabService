@@ -21,12 +21,22 @@ export default function ReceiptModal({ booking, onClose }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
       <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden my-8 animate-in fade-in zoom-in duration-200">
         {/* Top Header / Actions Bar (Hidden on print) */}
-        <div className="print:hidden bg-slate-900 text-white p-4 flex items-center justify-between">
+        <div className="print:hidden bg-slate-900 text-white p-4 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-5 h-5 text-amber-400" />
             <span className="font-bold text-sm">Official Ride Payment Receipt</span>
           </div>
           <div className="flex items-center gap-2">
+            {booking.trackingToken && (
+              <a
+                href={`/track/${booking.trackingToken}`}
+                target="_blank"
+                rel="noreferrer"
+                className="px-3 py-1.5 text-xs font-extrabold text-slate-900 bg-amber-400 hover:bg-amber-300 rounded-lg flex items-center gap-1 transition"
+              >
+                📍 Live Track Cab
+              </a>
+            )}
             <Button variant="emerald" size="sm" onClick={handlePrint} icon={Printer}>
               Print / Save PDF
             </Button>

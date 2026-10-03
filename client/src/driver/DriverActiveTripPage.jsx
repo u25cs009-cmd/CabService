@@ -37,6 +37,30 @@ export default function DriverActiveTripPage() {
     return () => clearInterval(interval);
   }, [fetchActiveTrip]);
 
+  // Screen Wake Lock API during active trip
+  useEffect(() => {
+    let wakeLock = null;
+    const requestWakeLock = async () => {
+      try {
+        if ('wakeLock' in navigator && trip) {
+          wakeLock = await navigator.wakeLock.request('screen');
+        }
+      } catch (err) {
+        console.warn('Screen Wake Lock request failed:', err.message);
+      }
+    };
+
+    if (trip) {
+      requestWakeLock();
+    }
+
+    return () => {
+      if (wakeLock) {
+        wakeLock.release().catch(() => {});
+      }
+    };
+  }, [trip]);
+
   const handleUpdateStatus = async (nextStatus, providedOtp = '') => {
     if (!trip) return;
     setError('');

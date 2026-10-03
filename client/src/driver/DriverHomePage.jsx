@@ -309,14 +309,19 @@ export default function DriverHomePage() {
         </div>
       )}
 
-      {/* Driver Instructions Banner */}
+      {/* Driver Instructions & Privacy Notice Banner */}
       <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '1rem', padding: '1.25rem' }}>
-        <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#f59e0b', margin: '0 0 0.5rem 0' }}>💡 Driver Instructions</h3>
-        <ul style={{ color: '#94a3b8', fontSize: '0.85rem', paddingLeft: '1.2rem', margin: 0, lineHeight: '1.6' }}>
+        <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#f59e0b', margin: '0 0 0.5rem 0' }}>💡 Driver Instructions & Privacy</h3>
+        <ul style={{ color: '#94a3b8', fontSize: '0.85rem', paddingLeft: '1.2rem', margin: '0 0 1rem 0', lineHeight: '1.6' }}>
           <li>Keep your status <strong>ONLINE</strong> to receive trip requests nearby.</li>
           <li>You will have <strong>30 seconds</strong> to respond to trip offers before they pass to the next driver.</li>
           <li>Always verify customer OTP before initiating the trip.</li>
         </ul>
+
+        {/* Location Safety Notice */}
+        <div style={{ background: '#0f172a', border: '1px solid #3b82f6', borderRadius: '0.75rem', padding: '0.85rem', color: '#93c5fd', fontSize: '0.8rem', lineHeight: '1.5' }}>
+          🔒 <strong>Location Privacy Notice:</strong> Your live GPS coordinates are shared with fleet dispatch and your active passenger <strong>strictly while you are ONLINE or on an active trip</strong>. Location sharing stops automatically the moment you switch to OFFLINE.
+        </div>
       </div>
     </DriverLayout>
   );
