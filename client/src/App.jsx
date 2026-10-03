@@ -31,6 +31,10 @@ import FareRulesAdminPage from './admin/pages/FareRulesAdminPage';
 import CouponsAdminPage from './admin/pages/CouponsAdminPage';
 import ReviewsAdminPage from './admin/pages/ReviewsAdminPage';
 
+import CompaniesAdminPage from './admin/pages/CompaniesAdminPage';
+import InvoicesAdminPage from './admin/pages/InvoicesAdminPage';
+import AnalyticsAdminPage from './admin/pages/AnalyticsAdminPage';
+
 import CustomerTrackingPage from './pages/CustomerTrackingPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import LiveMapAdminPage from './admin/pages/LiveMapAdminPage';
@@ -105,6 +109,14 @@ export default function App() {
                   }
                 />
                 <Route
+                  path="/admin/analytics"
+                  element={
+                    <ProtectedRoute>
+                      <AnalyticsAdminPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
                   path="/admin/live-map"
                   element={
                     <ProtectedRoute>
@@ -117,6 +129,22 @@ export default function App() {
                   element={
                     <ProtectedRoute>
                       <BookingsPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/companies"
+                  element={
+                    <ProtectedRoute>
+                      <CompaniesAdminPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/invoices"
+                  element={
+                    <ProtectedRoute>
+                      <InvoicesAdminPage />
                     </ProtectedRoute>
                   }
                 />

@@ -156,6 +156,25 @@ const bookingSchema = new mongoose.Schema(
       type: String,
       default: ''
     },
+    isCorporateBooking: {
+      type: Boolean,
+      default: false
+    },
+    company: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Company',
+      default: null
+    },
+    costCenter: {
+      type: String,
+      default: '',
+      trim: true
+    },
+    employeeId: {
+      type: String,
+      default: '',
+      trim: true
+    },
     paymentStatus: {
       type: String,
       enum: ['unpaid', 'partial', 'paid', 'failed', 'refunded'],
@@ -164,12 +183,12 @@ const bookingSchema = new mongoose.Schema(
     },
     paymentMode: {
       type: String,
-      enum: ['online', 'pay_to_driver'],
+      enum: ['online', 'pay_to_driver', 'pay_corporate'],
       default: 'pay_to_driver'
     },
     paymentOption: {
       type: String,
-      enum: ['full', 'advance', 'driver'],
+      enum: ['full', 'advance', 'driver', 'corporate'],
       default: 'driver'
     },
     amountPaid: {
