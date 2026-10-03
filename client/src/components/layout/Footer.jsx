@@ -66,7 +66,8 @@ export default function Footer() {
               { name: 'Our Services', path: '/services' },
               { name: 'Vehicle Fleet & Fares', path: '/vehicles' },
               { name: 'Book a Ride', path: '/book' },
-              { name: 'About Us', path: '/about' },
+              { name: 'Privacy Policy', path: '/privacy' },
+              { name: 'Terms of Service', path: '/terms' },
               { name: 'Contact Us', path: '/contact' }
             ].map((link) => (
               <li key={link.path}>

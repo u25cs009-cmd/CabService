@@ -1,7 +1,19 @@
+import { logger } from '../utils/logger.js';
+
 export function errorHandler(err, req, res, next) {
-  console.error(`[Error] ${err.name}: ${err.message}`);
-  
-  const statusCode = err.statusCode || res.statusCode === 200 ? 500 : res.statusCode;
+  logger.error({
+    err: {
+      message: err.message,
+      name: err.name,
+      stack: err.stack
+    },
+    url: req.originalUrl,
+    method: req.method,
+    ip: req.ip
+  }, `[Error] ${err.name || 'API Error'}: ${err.message}`);
+
+  const rawStatusCode = res.statusCode && res.statusCode !== 200 ? res.statusCode : 500;
+  const statusCode = err.statusCode || rawStatusCode;
 
   res.status(statusCode).json({
     success: false,
@@ -9,3 +21,4 @@ export function errorHandler(err, req, res, next) {
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
   });
 }
+

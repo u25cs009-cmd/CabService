@@ -79,7 +79,9 @@ export async function sendCustomerBookingUpdate(booking, driver = null) {
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: { user: emailUser, pass: emailPass }
-        const statusTitle = booking.status.toUpperCase();
+    });
+
+    const statusTitle = booking.status.toUpperCase();
     const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
     const trackingUrl = booking.trackingToken ? `${clientUrl}/track/${booking.trackingToken}` : `${clientUrl}/booking/receipt/${booking.referenceCode}`;
     let driverInfoHtml = '';

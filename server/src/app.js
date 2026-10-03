@@ -1,6 +1,12 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import compression from 'compression';
+import pinoHttp from 'pino-http';
+import mongoose from 'mongoose';
+import rateLimit from 'express-rate-limit';
+
+import { logger } from './utils/logger.js';
 import authRoutes from './routes/auth.js';
 import vehicleRoutes from './routes/vehicles.js';
 import fareRoutes from './routes/fare.js';
@@ -19,41 +25,99 @@ import { errorHandler } from './middleware/errorHandler.js';
 
 const app = express();
 
+// Trust reverse proxy (Render, Railway, Vercel, Nginx, etc.)
+app.set('trust proxy', 1);
+
+// Gzip Compression
+app.use(compression());
+
+// Structured HTTP Logging
+app.use(
+  pinoHttp({
+    logger,
+    autoLogging: {
+      ignore: (req) => req.url === '/health' || req.url === '/api/health'
+    }
+  })
+);
+
 // Start background driver dispatch offer expiry checker
 startDispatchCron();
 
-// Security HTTP headers
-app.use(helmet());
+// Helmet Security HTTP Headers
+app.use(
+  helmet({
+    contentSecurityPolicy: false // Disabled for API server flexibility with Socket.IO & client builds
+  })
+);
 
-// CORS configuration (limited to CLIENT_URL)
-const allowedOrigin = process.env.CLIENT_URL || 'http://localhost:5173';
+// CORS configuration (strictly limited to CLIENT_URL and custom domains)
+const allowedOrigins = [process.env.CLIENT_URL, process.env.CUSTOM_DOMAIN].filter(Boolean);
+
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || origin === allowedOrigin || origin.startsWith('http://localhost')) {
-        callback(null, true);
-      } else {
-        callback(new Error('CORS Policy: Origin not allowed'));
+      if (!origin) return callback(null, true);
+
+      if (process.env.NODE_ENV !== 'production' && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
+        return callback(null, true);
       }
+
+      if (allowedOrigins.length > 0 && allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      // If allowedOrigins is not explicitly configured in dev, permit request or warn
+      if (!process.env.CLIENT_URL && process.env.NODE_ENV !== 'production') {
+        return callback(null, true);
+      }
+
+      return callback(new Error(`CORS Policy: Origin ${origin} not allowed`));
     },
     credentials: true
   })
 );
 
-// Body parsing with rawBody capture for webhook HMAC signatures
+// Global General Rate Limiter (1000 requests per 15 minutes window)
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 1000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many requests from this IP, please try again after 15 minutes.' }
+});
+
+app.use('/api/', apiLimiter);
+
+// Body parsing with request body size limit (1MB max) and rawBody capture for Razorpay webhooks
 app.use(
   express.json({
+    limit: '1mb',
     verify: (req, res, buf) => {
       req.rawBody = buf;
     }
   })
 );
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
-// Health Check route
-app.get('/api/health', (req, res) => {
+// Health Check Endpoint (Validates MongoDB connection status)
+app.get(['/health', '/api/health'], (req, res) => {
+  const dbState = mongoose.connection.readyState;
+  const isDbConnected = dbState === 1;
+
+  if (!isDbConnected) {
+    return res.status(503).json({
+      status: 'error',
+      database: 'disconnected',
+      dbState,
+      service: 'Pi-Pip-Pip Cab Service API',
+      timestamp: new Date().toISOString()
+    });
+  }
+
   res.json({
     status: 'ok',
+    database: 'connected',
     service: 'Pi-Pip-Pip Cab Service API',
     timestamp: new Date().toISOString()
   });
@@ -74,8 +138,6 @@ app.use('/api/admin/companies', companyRoutes);
 app.use('/api/customer/company-status', companyRoutes);
 app.use('/api/admin/invoices', invoiceRoutes);
 app.use('/api/admin/analytics', analyticsRoutes);
-
-
 
 // 404 Handler
 app.use((req, res) => {
