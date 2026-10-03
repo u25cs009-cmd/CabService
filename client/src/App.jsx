@@ -31,91 +31,127 @@ import FareRulesAdminPage from './admin/pages/FareRulesAdminPage';
 import CouponsAdminPage from './admin/pages/CouponsAdminPage';
 import ReviewsAdminPage from './admin/pages/ReviewsAdminPage';
 
+import { DriverAuthProvider } from './driver/DriverAuthContext';
+import DriverProtectedRoute from './driver/DriverProtectedRoute';
+import DriverLoginPage from './driver/DriverLoginPage';
+import DriverHomePage from './driver/DriverHomePage';
+import DriverActiveTripPage from './driver/DriverActiveTripPage';
+import DriverHistoryPage from './driver/DriverHistoryPage';
+
 export default function App() {
   return (
     <HelmetProvider>
       <AuthProvider>
         <CustomerAuthProvider>
-          <Router>
-            <Routes>
-              {/* Public Customer Routes */}
-              <Route path="/" element={<HomePage />} />
-              <Route path="/services" element={<ServicesPage />} />
-              <Route path="/vehicles" element={<VehiclesPage />} />
-              <Route path="/book" element={<BookingPage />} />
-              <Route path="/booking/receipt/:referenceCode" element={<ReceiptPage />} />
-              <Route path="/login" element={<CustomerLoginPage />} />
-              <Route path="/register" element={<CustomerRegisterPage />} />
-              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-              <Route path="/reset-password" element={<ResetPasswordPage />} />
-              <Route path="/account" element={<CustomerAccountPage />} />
-              <Route path="/review/:referenceCode" element={<ReviewPage />} />
-              <Route path="/about" element={<AboutPage />} />
-              <Route path="/contact" element={<ContactPage />} />
+          <DriverAuthProvider>
+            <Router>
+              <Routes>
+                {/* Public Customer Routes */}
+                <Route path="/" element={<HomePage />} />
+                <Route path="/services" element={<ServicesPage />} />
+                <Route path="/vehicles" element={<VehiclesPage />} />
+                <Route path="/book" element={<BookingPage />} />
+                <Route path="/booking/receipt/:referenceCode" element={<ReceiptPage />} />
+                <Route path="/login" element={<CustomerLoginPage />} />
+                <Route path="/register" element={<CustomerRegisterPage />} />
+                <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                <Route path="/reset-password" element={<ResetPasswordPage />} />
+                <Route path="/account" element={<CustomerAccountPage />} />
+                <Route path="/review/:referenceCode" element={<ReviewPage />} />
+                <Route path="/about" element={<AboutPage />} />
+                <Route path="/contact" element={<ContactPage />} />
 
-              {/* Admin Panel Routes */}
-              <Route path="/admin/login" element={<AdminLoginPage />} />
-              <Route
-                path="/admin"
-                element={
-                  <ProtectedRoute>
-                    <DashboardPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/admin/bookings"
-                element={
-                  <ProtectedRoute>
-                    <BookingsPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/admin/vehicles"
-                element={
-                  <ProtectedRoute>
-                    <VehiclesAdminPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/admin/drivers"
-                element={
-                  <ProtectedRoute>
-                    <DriversAdminPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/admin/fare-rules"
-                element={
-                  <ProtectedRoute>
-                    <FareRulesAdminPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/admin/coupons"
-                element={
-                  <ProtectedRoute>
-                    <CouponsAdminPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/admin/reviews"
-                element={
-                  <ProtectedRoute>
-                    <ReviewsAdminPage />
-                  </ProtectedRoute>
-                }
-              />
+                {/* Driver App Routes (Noindex PWA) */}
+                <Route path="/driver/login" element={<DriverLoginPage />} />
+                <Route
+                  path="/driver"
+                  element={
+                    <DriverProtectedRoute>
+                      <DriverHomePage />
+                    </DriverProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/driver/active-trip"
+                  element={
+                    <DriverProtectedRoute>
+                      <DriverActiveTripPage />
+                    </DriverProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/driver/history"
+                  element={
+                    <DriverProtectedRoute>
+                      <DriverHistoryPage />
+                    </DriverProtectedRoute>
+                  }
+                />
 
-              {/* Fallback 404 Route */}
-              <Route path="*" element={<NotFoundPage />} />
-            </Routes>
-          </Router>
+                {/* Admin Panel Routes */}
+                <Route path="/admin/login" element={<AdminLoginPage />} />
+                <Route
+                  path="/admin"
+                  element={
+                    <ProtectedRoute>
+                      <DashboardPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/bookings"
+                  element={
+                    <ProtectedRoute>
+                      <BookingsPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/vehicles"
+                  element={
+                    <ProtectedRoute>
+                      <VehiclesAdminPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/drivers"
+                  element={
+                    <ProtectedRoute>
+                      <DriversAdminPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/fare-rules"
+                  element={
+                    <ProtectedRoute>
+                      <FareRulesAdminPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/coupons"
+                  element={
+                    <ProtectedRoute>
+                      <CouponsAdminPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/reviews"
+                  element={
+                    <ProtectedRoute>
+                      <ReviewsAdminPage />
+                    </ProtectedRoute>
+                  }
+                />
+
+                {/* Fallback 404 Route */}
+                <Route path="*" element={<NotFoundPage />} />
+              </Routes>
+            </Router>
+          </DriverAuthProvider>
         </CustomerAuthProvider>
       </AuthProvider>
     </HelmetProvider>

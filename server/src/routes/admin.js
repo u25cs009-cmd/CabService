@@ -4,17 +4,26 @@ import Booking from '../models/Booking.js';
 import Vehicle from '../models/Vehicle.js';
 import Driver from '../models/Driver.js';
 import FareRule from '../models/FareRule.js';
+import User from '../models/User.js';
+import DispatchSettings from '../models/DispatchSettings.js';
 import { requireAdmin } from '../middleware/auth.js';
 import { sendCustomerBookingUpdate } from '../services/emailService.js';
+import { findAndOfferNextDriver, getDispatchSettings } from '../services/dispatchService.js';
+import bcrypt from 'bcryptjs';
 
 const router = express.Router();
 
 router.use(requireAdmin);
 
 const VALID_TRANSITIONS = {
-  pending: ['confirmed', 'cancelled'],
-  confirmed: ['assigned', 'completed', 'cancelled'],
-  assigned: ['completed', 'cancelled'],
+  pending: ['confirmed', 'offered', 'assigned', 'cancelled', 'needs_manual_assignment'],
+  confirmed: ['offered', 'assigned', 'completed', 'cancelled', 'needs_manual_assignment'],
+  offered: ['assigned', 'cancelled', 'needs_manual_assignment'],
+  assigned: ['on_the_way', 'completed', 'cancelled'],
+  on_the_way: ['arrived', 'completed', 'cancelled'],
+  arrived: ['in_progress', 'completed', 'cancelled'],
+  in_progress: ['completed', 'cancelled'],
+  needs_manual_assignment: ['assigned', 'offered', 'cancelled'],
   completed: [],
   cancelled: []
 };
@@ -329,7 +338,7 @@ router.get('/drivers', async (req, res, next) => {
     const isDbConnected = mongoose.connection.readyState === 1;
     let drivers = [];
     if (isDbConnected) {
-      drivers = await Driver.find().sort({ createdAt: -1 });
+      drivers = await Driver.find().populate('user', 'email phone').sort({ createdAt: -1 });
     }
     res.json({ success: true, count: drivers.length, data: drivers });
   } catch (error) {
@@ -339,16 +348,57 @@ router.get('/drivers', async (req, res, next) => {
 
 router.post('/drivers', async (req, res, next) => {
   try {
-    const { name, phone, licenseNo, vehicleNumber, status } = req.body;
+    const { name, phone, email, licenseNo, vehicleNumber, vehicleType, password, status } = req.body;
+
+    if (!name || !phone || !licenseNo || !vehicleNumber) {
+      return res.status(400).json({ success: false, message: 'Name, phone, licenseNo, and vehicleNumber are required.' });
+    }
+
+    const driverEmail = (email && email.trim()) ? email.trim().toLowerCase() : `driver.${phone.replace(/\D/g, '')}@pipippip.com`;
+    const tempPassword = password || 'Driver@123';
+
+    // Check existing User
+    const existingUser = await User.findOne({ email: driverEmail });
+    if (existingUser) {
+      return res.status(400).json({ success: false, message: `An account already exists with email: ${driverEmail}` });
+    }
+
     const driver = new Driver({
       name,
       phone,
       licenseNo,
       vehicleNumber,
-      status: status || 'available'
+      vehicleType: vehicleType || 'Sedan',
+      status: status || 'available',
+      isMustChangePassword: true
     });
     await driver.save();
-    res.status(201).json({ success: true, message: 'Driver created successfully', data: driver });
+
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(tempPassword, salt);
+
+    const user = new User({
+      name,
+      email: driverEmail,
+      phone,
+      passwordHash,
+      role: 'driver',
+      driver: driver._id
+    });
+    await user.save();
+
+    driver.user = user._id;
+    await driver.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'Driver created successfully',
+      data: {
+        driver,
+        email: user.email,
+        temporaryPassword: tempPassword
+      }
+    });
   } catch (error) {
     next(error);
   }
@@ -362,6 +412,52 @@ router.patch('/drivers/:id', async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Driver not found' });
     }
     res.json({ success: true, message: 'Driver updated successfully', data: driver });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// DISPATCH SETTINGS ENDPOINTS
+router.get('/dispatch-settings', async (req, res, next) => {
+  try {
+    const settings = await getDispatchSettings();
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch('/dispatch-settings', async (req, res, next) => {
+  try {
+    let settings = await DispatchSettings.findOne();
+    if (!settings) {
+      settings = new DispatchSettings(req.body);
+    } else {
+      Object.assign(settings, req.body);
+    }
+    await settings.save();
+    res.json({ success: true, message: 'Dispatch settings updated', data: settings });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/admin/bookings/:id/dispatch - Manually trigger automated dispatch
+router.post('/bookings/:id/dispatch', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const result = await findAndOfferNextDriver(id);
+    if (!result) {
+      return res.json({
+        success: false,
+        message: 'Could not dispatch to driver. Check if driver is available in search radius or retries exhausted.'
+      });
+    }
+    res.json({
+      success: true,
+      message: `Trip offered to driver ${result.driver.name}`,
+      data: result
+    });
   } catch (error) {
     next(error);
   }
