@@ -1,4 +1,4 @@
-import dotenv from 'dotenv';
+import 'dotenv/config';
 import http from 'http';
 import mongoose from 'mongoose';
 import app from './app.js';
@@ -6,19 +6,6 @@ import { connectDB } from './config/db.js';
 import { validateEnv } from './config/envCheck.js';
 import { initSocket } from './socket.js';
 import { logger } from './utils/logger.js';
-
-// Preserve explicitly set shell/host environment variables
-const initialEnv = { ...process.env };
-
-// Load environment variables from .env file if present
-dotenv.config();
-
-// Restore explicit environment variables passed by host/shell
-Object.keys(initialEnv).forEach((key) => {
-  if (initialEnv[key] !== undefined) {
-    process.env[key] = initialEnv[key];
-  }
-});
 
 // Validate startup environment variables (Fails hard in production if missing/weak)
 validateEnv();

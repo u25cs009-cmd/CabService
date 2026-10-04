@@ -6,11 +6,10 @@ import Booking from './models/Booking.js';
 let io = null;
 
 export const initSocket = (httpServer) => {
-  const allowedOrigins = [process.env.CLIENT_URL, process.env.CUSTOM_DOMAIN].filter(Boolean);
-
   io = new Server(httpServer, {
     cors: {
       origin: (origin, callback) => {
+        const allowedOrigins = [process.env.CLIENT_URL, process.env.CUSTOM_DOMAIN].filter(Boolean);
         if (!origin) return callback(null, true);
         if (process.env.NODE_ENV !== 'production' && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
           return callback(null, true);

@@ -22,10 +22,10 @@ export default defineConfig({
             }
             return 'vendor-utils';
           }
-          if (id.includes('/src/pages/admin/')) {
+          if (id.includes('/src/admin/')) {
             return 'section-admin';
           }
-          if (id.includes('/src/pages/driver/')) {
+          if (id.includes('/src/driver/')) {
             return 'section-driver';
           }
         }

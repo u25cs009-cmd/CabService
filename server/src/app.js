@@ -52,12 +52,12 @@ app.use(
 );
 
 // CORS configuration (strictly limited to CLIENT_URL and custom domains)
-const allowedOrigins = [process.env.CLIENT_URL, process.env.CUSTOM_DOMAIN].filter(Boolean);
-
 app.use(
   cors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
+
+      const allowedOrigins = [process.env.CLIENT_URL, process.env.CUSTOM_DOMAIN].filter(Boolean);
 
       if (process.env.NODE_ENV !== 'production' && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
         return callback(null, true);

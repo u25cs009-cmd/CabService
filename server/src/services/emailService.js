@@ -128,6 +128,7 @@ export async function sendCustomerBookingUpdate(booking, driver = null) {
             
             <p style="margin-top: 20px;">Need support? Call us 24/7 at <strong>6201901834</strong>.</p>
           </div>
+        </div>
       `
     };
 
