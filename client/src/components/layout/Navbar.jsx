@@ -1,3 +1,8 @@
+import React, { useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { Car, Phone, ShieldCheck, CalendarCheck, Menu, X } from 'lucide-react';
+import { siteConfig } from '../../config/site';
+import Button from '../common/Button';
 import { useCustomerAuth } from '../../context/CustomerAuthContext';
 
 export default function Navbar() {
